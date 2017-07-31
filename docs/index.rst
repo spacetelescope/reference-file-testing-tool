@@ -1,17 +1,29 @@
-Documentation
-=============
+#########################################
+Reference File Testing Tool Documentation
+#########################################
 
-This is the documentation for testref.
-long
+Welcome to the Reference File Testing Tool documentation! The Reference File Testing Tool is a python package for
+testing JWST Calibration reference files before delivery to Calibration Reference Data System (CRDS).
+
+.. _getting_started:
+
+***************
+Getting Started
+***************
 
 .. toctree::
-  :maxdepth: 2
+   :maxdepth: 1
 
-  reftest/index.rst
+   install
 
-.. note:: The layout of this directory is simply a suggestion.  To follow
-          traditional practice, do *not* edit this page, but instead place
-          all documentation for the affiliated package inside ``testref/``.
-          The traditional practice was intended to allow the affiliated
-          package to eventually be merged into the main astropy package.
-          You can follow this practice or choose your own layout.
+.. _user-docs:
+
+******************
+User Documentation
+******************
+
+.. toctree::
+  :maxdepth: 1
+
+  reftest/index
+  db/index

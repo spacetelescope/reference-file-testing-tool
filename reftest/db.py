@@ -5,6 +5,9 @@ from sqlalchemy import Column, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
+__all__ = ['TestData', 'data_exists', 'load_session', 'create_test_data_db',
+           'add_test_data']
+
 Base = declarative_base()
 
 REFTEST_DATA_DB = os.environ.get('REFTEST_DB')
