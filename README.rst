@@ -5,6 +5,10 @@ testref
     :target: http://www.astropy.org
     :alt: Powered by Astropy Badge
 
+.. image:: https://readthedocs.org/projects/reference-file-testing-tool/badge/?version=latest
+    :target: http://reference-file-testing-tool.readthedocs.io/en/latest/?badge=latest
+    :alt: Documentation Status
+
 long
 
 
