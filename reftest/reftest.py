@@ -51,6 +51,8 @@ def find_matches(ref_file, max_matches=-1):
 
     Returns
     -------
+    matches: list
+        a list of filenames
 
     """
     header = fits.getheader(ref_file)
@@ -74,13 +76,14 @@ def find_matches(ref_file, max_matches=-1):
 
 def main(args=None):
 
-    from astropy.utils.compat import argparse
+    import argparse
 
     parser = argparse.ArgumentParser(
         description="Check that a reference file runs in the calibration pipeline",
         )
     parser.add_argument('reference_file', help='the reference file to test')
     parser.add_argument('--data', help='data to run pipeline with', default=None)
+    parser.add_argument('--max-matches', type=int, help='maximum number of data sets to test', default=-1)
 
     res = parser.parse_args(args)
 
@@ -90,6 +93,6 @@ def main(args=None):
     if data_file is not None:
         test_reference_file(ref_file, data_file)
     else:
-        data_files = find_matches(ref_file)
+        data_files = find_matches(ref_file, res.max_matches)
         for data_file in data_files:
             test_reference_file(ref_file, data_file)

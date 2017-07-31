@@ -1,6 +1,8 @@
-name: testref
+name: reftest
 
 channels:
+    - http://ssb.stsci.edu/conda-dev
+    - http://ssb.stsci.edu/astroconda
     - astropy
 
 dependencies:
@@ -8,5 +10,8 @@ dependencies:
     - Cython
     - matplotlib
     - numpy
+    - sqlalchemy
+    - jwst
+    - stsci_sphinx_theme
 #   - pip:
 #       - dependency_from_pip

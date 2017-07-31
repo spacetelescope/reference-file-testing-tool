@@ -7,7 +7,7 @@ long
 .. toctree::
   :maxdepth: 2
 
-  testref/index.rst
+  reftest/index.rst
 
 .. note:: The layout of this directory is simply a suggestion.  To follow
           traditional practice, do *not* edit this page, but instead place
