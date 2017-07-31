@@ -15,7 +15,8 @@ class TestData(Base):
     # some basic fits header information.
     id = Column(Integer, primary_key=True)
     filename = Column(String(250))
-
+    DATE_OBS = Column(String(10))
+    TIME_OBS = Column(String(12))
     INSTRUME = Column(String(20))
     READPATT = Column(String(20))
     EXP_TYPE = Column(String(20))
@@ -33,7 +34,8 @@ class TestData(Base):
         # from a FITS file
         self.filename = filename
         header = fits.getheader(filename)
-
+        self.DATE_OBS = header.get('DATE-OBS')
+        self.TIME_OBS = header.get('TIME-OBS')
         self.INSTRUME = header.get('INSTRUME')
         self.DETECTOR = header.get('DETECTOR')
         self.CHANNEL = header.get('CHANNEL')
@@ -44,6 +46,37 @@ class TestData(Base):
         self.EXP_TYPE = header.get('EXP_TYPE')
         self.READPATT = header.get('READPATT')
         self.SUBARRAY = header.get('SUBARRAY')
+
+def data_exists(fname, session):
+    """
+    Check if there is already a dataset with the proposed dataset's parameters
+    
+    Parameters
+    ----------
+    fname: str
+        proposed new file
+    session: sqlalchemy.Session
+        DB Session
+
+    Returns
+    -------
+        True if there is no 
+        
+    """
+    header = fits.getheader(fname)
+    args = {}
+    args['INSTRUME'] = header.get('INSTRUME')
+    args['DETECTOR'] = header.get('DETECTOR')
+    args['CHANNEL'] = header.get('CHANNEL')
+    args['FILTER'] = header.get('FILTER')
+    args['PUPIL'] = header.get('PUPIL')
+    args['BAND'] = header.get('BAND')
+    args['GRATING'] = header.get('GRATING')
+    args['EXP_TYPE'] = header.get('EXP_TYPE')
+    args['READPATT'] = header.get('READPATT')
+    args['SUBARRAY'] = header.get('SUBARRAY')
+    query_result = session.query(TestData).filter_by(**args)
+    return bool(query_result.count())
 
 
 def load_session(db_path):
@@ -81,7 +114,7 @@ def create_test_data_db(db_path):
     Base.metadata.create_all(engine)
 
 
-def add_test_data(db_path, file_path):
+def add_test_data(db_path, file_path, overwrite=False):
     """
     Add files to the test data DB.
     Parameters
@@ -92,22 +125,10 @@ def add_test_data(db_path, file_path):
 
     session = load_session(db_path)
     for fname in glob.glob(file_path):
-        new_test_data = TestData(fname)
-        session.add(new_test_data)
-        session.commit()
+        if data_exists(fname, session) and not overwrite:
+            print('There is already a dataset with the same parameters')
+        else:
+            new_test_data = TestData(fname)
+            session.add(new_test_data)
+            session.commit()
 
-
-def main(args=None):
-    from astropy.utils.compat import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Check that a reference file runs in the calibration pipeline",
-        )
-    parser.add_argument(
-        'test_data', help='Globable file string for test data')
-    parser.add_argument(
-        '--db_path', help='Path to save the SQLite DB',
-                        default=REFTEST_DATA_DB)
-
-    res = parser.parse_args(args)
-    create_test_data_db(res.db_path)
