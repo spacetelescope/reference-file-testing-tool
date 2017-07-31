@@ -114,9 +114,9 @@ html_theme = "stsci_sphinx_theme"
 
 # Please update these texts to match the name of your package.
 html_theme_options = {
-    'logotext1': 'package',  # white,  semi-bold
-    'logotext2': '-template',  # orange, light
-    'logotext3': ':docs'   # white,  light
+    'logotext1': 'Reference File Testing Tool',  # white,  semi-bold
+    'logotext2': '',  # orange, light
+    'logotext3': ''   # white,  light
     }
 
 
