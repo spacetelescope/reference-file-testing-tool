@@ -39,7 +39,21 @@ def test_reference_file(ref_file, data_file):
 
     sloper_pipeline.run(data_file)
 
-def find_matches(header):
+def find_matches(ref_file, max_matches=-1):
+    """
+    
+    Parameters
+    ----------
+    ref_file: str
+        File path to reference file to test
+    max_matches: int
+        Maximum matches to return. (Default=-1, return all matches)
+
+    Returns
+    -------
+
+    """
+    header = fits.getheader(ref_file)
     context = crds.heavy_client.get_processing_mode('jwst')[1]
     pmap = crds.rmap.load_mapping(context)
     imap = pmap.get_imap(header['INSTRUME'])
@@ -55,7 +69,7 @@ def find_matches(header):
 
     session = db.load_session(db.REFTEST_DATA_DB)
     query_result = session.query(db.TestData).filter_by(**query_args)
-    return [result.filename for result in query_result]
+    return [result.filename for result in query_result][:max_matches]
 
 
 def main(args=None):
@@ -76,4 +90,6 @@ def main(args=None):
     if data_file is not None:
         test_reference_file(ref_file, data_file)
     else:
-        print('A data file is currently required to run')
+        data_files = find_matches(ref_file)
+        for data_file in data_files:
+            test_reference_file(ref_file, data_file)
