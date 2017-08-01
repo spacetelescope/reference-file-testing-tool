@@ -4,13 +4,14 @@ Using the Reference File Testing Tool
 
 Using user-supplied test data
 =============================
+
 The basic component of the Reference File Testing Tool is the ``test_reference_file`` function.  After
 `installing the package <install.html>`_ it can be called from the command line with::
 
     test_reference_file /path/to/my/reference_file --data /path/to/some_uncal.fits
 
 where the ``--data`` argument is some suitable level 1b JWST data.  This will run the JWST calibration pipeline on the
-uncalibrated data overriding the default reference file with the one supplied
+uncalibrated data overriding the default reference file with the one supplied.
 
 Alternatively, one can call the `~reftest.reftest.test_reference_file()` function from within a python session::
 
