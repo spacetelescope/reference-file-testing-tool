@@ -15,7 +15,7 @@ Alternatively, one can call the `~reftest.reftest.test_reference_file()` functio
     >>> from reftest.reftest import test_reference_file
     >>> test_reference_file('/path/to/my/reference_file', '/path/to/some_uncal.fits')
 
-Using a test data Database
+Using a test data database
 ==========================
 
 If you don't want to manually supply test data each time you test a reference file you can create a database of test
@@ -36,4 +36,13 @@ You can then add data to the database with `~reftest.db.add_test_data()`:
     By default the `~reftest.db.add_test_data()` function will not add data if there is an existing data set with the
     same FITS keywords (INSTRUME, DETECTOR, CHANNEL, FILTER, PUPIL, BAND, GRATING, EXP_TYPE, READPATT, SUBARRAY) already
     in the database.  You can override this behaviour by passing the keyword argument ``force=True``.
+
+With a database created you can run the Tool without specifying specific test data with::
+
+    test_reference_file /path/to/my/reference_file
+
+By default the Tool will test all matching data in the database; however, you can specify a maximum number of test data
+to run.  For example, to use only the first match found::
+
+    test_reference_file /path/to/my/reference_file --max-matches 1
 

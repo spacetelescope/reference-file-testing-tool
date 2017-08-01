@@ -94,5 +94,10 @@ def main(args=None):
         test_reference_file(ref_file, data_file)
     else:
         data_files = find_matches(ref_file, res.max_matches)
-        for data_file in data_files:
-            test_reference_file(ref_file, data_file)
+        if data_files:
+            for data_file in data_files:
+                test_reference_file(ref_file, data_file)
+
+        else:
+            print('No matching test data found in database')
+
