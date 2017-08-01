@@ -9,8 +9,6 @@ testref
     :target: http://reference-file-testing-tool.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
 
-long
-
 
 License
 -------

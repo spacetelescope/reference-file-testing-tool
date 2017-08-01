@@ -15,6 +15,7 @@ Getting Started
    :maxdepth: 1
 
    install
+   usage
 
 .. _user-docs:
 

@@ -117,7 +117,7 @@ def create_test_data_db(db_path):
     Base.metadata.create_all(engine)
 
 
-def add_test_data(db_path, file_path, overwrite=False):
+def add_test_data(db_path, file_path, force=False):
     """
     Add files to the test data DB.
     Parameters
@@ -128,7 +128,7 @@ def add_test_data(db_path, file_path, overwrite=False):
 
     session = load_session(db_path)
     for fname in glob.glob(file_path):
-        if data_exists(fname, session) and not overwrite:
+        if data_exists(fname, session) and not force:
             print('There is already a dataset with the same parameters')
         else:
             new_test_data = TestData(fname)

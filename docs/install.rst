@@ -14,8 +14,8 @@ The Reference File Testing Tool has the following dependencies:
 
 - `JWST Calibration Pipeline <http://ssb.stsci.edu/doc/jwst_dev/>`_
 
-Installation
-============
+Installing the Reference File Testing Tool
+==========================================
 
 The Tool is currently in early development and must be installed from the GitHub development repository.
 
@@ -29,11 +29,11 @@ To install the Tool with `pip <http://www.pip-installer.org/en/latest/>`_, simpl
 Building from source
 --------------------
 
-The latest development version of the Tool can be cloned from GitHub using this command:
+The latest development version of the Tool can be cloned from GitHub using this command::
 
     git clone git://github.com/STScI-MESA/reference-file-testing-tool.git
 
-To install the Tool (from the root of the source tree):
+To install the Tool (from the root of the source tree)::
 
     python setup.py install
 
