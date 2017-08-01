@@ -9,6 +9,10 @@ Reference File Testing Tool
     :target: http://reference-file-testing-tool.readthedocs.io/en/latest/?badge=latest
     :alt: Documentation Status
 
+.. image:: https://travis-ci.org/STScI-MESA/reference-file-testing-tool.svg?branch=master
+    :target: https://travis-ci.org/STScI-MESA/reference-file-testing-tool
+    :alt: Build Status
+
 Requirements
 ------------
 The Reference File Testing Tool has the following dependencies:
