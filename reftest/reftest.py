@@ -73,31 +73,3 @@ def find_matches(ref_file, max_matches=-1):
     query_result = session.query(db.TestData).filter_by(**query_args)
     return [result.filename for result in query_result][:max_matches]
 
-
-def main(args=None):
-
-    import argparse
-
-    parser = argparse.ArgumentParser(
-        description="Check that a reference file runs in the calibration pipeline",
-        )
-    parser.add_argument('reference_file', help='the reference file to test')
-    parser.add_argument('--data', help='data to run pipeline with', default=None)
-    parser.add_argument('--max-matches', type=int, help='maximum number of data sets to test', default=-1)
-
-    res = parser.parse_args(args)
-
-    ref_file = res.reference_file
-    data_file = res.data
-
-    if data_file is not None:
-        test_reference_file(ref_file, data_file)
-    else:
-        data_files = find_matches(ref_file, res.max_matches)
-        if data_files:
-            for data_file in data_files:
-                test_reference_file(ref_file, data_file)
-
-        else:
-            print('No matching test data found in database')
-

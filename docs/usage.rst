@@ -2,6 +2,8 @@
 Using the Reference File Testing Tool
 *************************************
 
+Using user-supplied test data
+=============================
 The basic component of the Reference File Testing Tool is the ``test_reference_file`` function.  After
 `installing the package <install.html>`_ it can be called from the command line with::
 
@@ -22,12 +24,12 @@ If you don't want to manually supply test data each time you test a reference fi
 data for the Test Tool to automatically select from.
 
 The database uses SQLite and is managed with the SQLAlchemy package.  You can create an empty database with the
-`~reftest.db.create_test_data_db()` function.:
+`~reftest.db.create_test_data_db()` function.
 
     >>> from reftest import db
     >>> db.create_test_data_db('/path/to/save.db')
 
-You can then add data to the database with `~reftest.db.add_test_data()`:
+You can then add data to the database with `~reftest.db.add_test_data()`
 
     >>> db.add_test_data('/path/to/save.db', '/path/to/test/data.fits')
 
@@ -37,7 +39,12 @@ You can then add data to the database with `~reftest.db.add_test_data()`:
     same FITS keywords (INSTRUME, DETECTOR, CHANNEL, FILTER, PUPIL, BAND, GRATING, EXP_TYPE, READPATT, SUBARRAY) already
     in the database.  You can override this behaviour by passing the keyword argument ``force=True``.
 
-With a database created you can run the Tool without specifying specific test data with::
+With a database created, set the environment variable ``REFTEST_DB`` to the path of the database, either in the shell or
+in your ``bashrc`` with::
+
+    export REFTEST_DB=/path/to/db
+
+You can run the Tool without specifying specific test data with::
 
     test_reference_file /path/to/my/reference_file
 
