@@ -60,28 +60,6 @@ env:
         - PYTHON_VERSION=2.7 SETUP_CMD='egg_info'
 #        - PYTHON_VERSION=3.6 SETUP_CMD='egg_info'
 
-matrix:
-
-    # Don't wait for allowed failures
-    fast_finish: true
-
-    include:
-        # Try Linux
-         - os: linux
-           env: SETUP_CMD='test'
-        # Try MacOS X
-#        - os: osx
-#          env: SETUP_CMD='test'
-
-        # Do a coverage test.
-#        - os: linux
-#          env: SETUP_CMD='test --coverage'
-
-        # Check for sphinx doc build warnings - we do this first because it
-        # may run for a long time
-        - os: linux
-          env: SETUP_CMD='build_docs -w'
-
 install:
 
     # We now use the ci-helpers package to set up our testing environment.
