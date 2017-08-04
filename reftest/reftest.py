@@ -1,7 +1,8 @@
+from __future__ import print_function
 from . import db
 # from . import log
 
-from jwst.pipeline import calwebb_sloper, calwebb_image2, calwebb_spec2
+from jwst.pipeline import calwebb_dark, calwebb_sloper, calwebb_image2, calwebb_spec2
 import crds
 from astropy.io import fits
 # import logging
@@ -22,15 +23,22 @@ meta_to_fits = {
     'META.SUBARRAY.NAME': 'SUBARRAY'
 }
 
-IMAGING = ['fgs_image', 'fgs_focus', 'fgs_skyflat', 'fgs_intflat', 'mir_image', 'mir_tacq', 'mir_lyot', 'mir_4qpm', 'mir_coroncal', 'nrc_image',
-'nrc_tacq', 'nrc_coron', 'nrc_taconfirm', 'nrc_focus', 'nrc_tsimage', 'nis_image', 'nis_ami', 'nis_tacq', 'nis_taconfirm', 'nis_focus', 'nrs_tacq', 'nrs_taslit',
-'nrs_taconfirm', 'nrs_confirm', 'nrs_image', 'nrs_focus', 'nrs_mimf', 'nrs_bota']
+IMAGING = ['fgs_image', 'fgs_focus', 'fgs_skyflat', 'fgs_intflat', 'mir_image',
+           'mir_tacq', 'mir_lyot', 'mir_4qpm', 'mir_coroncal', 'nrc_image',
+           'nrc_tacq', 'nrc_coron', 'nrc_taconfirm', 'nrc_focus', 'nrc_tsimage',
+           'nis_image', 'nis_ami', 'nis_tacq', 'nis_taconfirm', 'nis_focus',
+           'nrs_tacq', 'nrs_taslit', 'nrs_taconfirm', 'nrs_confirm', 'nrs_image',
+           'nrs_focus', 'nrs_mimf', 'nrs_bota']
 
-def get_level2b_pipeline(exp_type):
-    if exp_type.lower() in IMAGING:
-        return calwebb_image2.Image2Pipeline()
+def get_pipelines(exp_type):
+    if 'DARK' in exp_type:
+        return [calwebb_dark.DarkPipeline()]
+    elif 'FLAT' in exp_type:
+        return [calwebb_sloper.SloperPipeline()]
+    elif exp_type.lower() in IMAGING:
+        return [calwebb_sloper.SloperPipeline(), calwebb_image2.Image2Pipeline()]
     else:
-        return calwebb_spec2.Spec2Pipeline()
+        return [calwebb_sloper.SloperPipeline(), calwebb_spec2.Spec2Pipeline()]
 
 def override_reference_file(ref_file, pipeline):
     header = fits.getheader(ref_file)
@@ -54,25 +62,24 @@ def test_reference_file(ref_file, data_file):
     data_file: str
         Path to data file.
     """
-    level2a_pipeline = calwebb_sloper.SloperPipeline()
-    level2b_pipeline = get_level2b_pipeline(fits.getheader(data_file)['EXP_TYPE'])
 
-    level2a_pipeline = override_reference_file(ref_file, level2a_pipeline)
-    level2b_pipeline = override_reference_file(ref_file, level2b_pipeline)
     print('Testing {}'.format(data_file))
+    result = data_file
     try:
-        print('Running {}'.format(level2a_pipeline))
-        result = level2a_pipeline.run(data_file)
-        print('Completed {}'.format(level2a_pipeline))
-        print('Running {}'.format(level2b_pipeline))
-        level2b_pipeline.run(result)
-        print('Completed {}'.format(level2b_pipeline))
+        for pipeline in get_pipelines(fits.getheader(data_file)['EXP_TYPE']):
+            pipeline = override_reference_file(ref_file, pipeline)
+            print('Running {}'.format(pipeline))
+            result = pipeline.run(result)
+            print('Completed {}'.format(pipeline))
+
+        return 1
 
     except Exception as err:
         print('{} failed with error {}'.format(data_file, (err.message)))
+        return 0
 
 
-def find_matches(ref_file, session, max_matches=-1):
+def find_matches(ref_file, session, max_matches=None):
     """
     
     Parameters
@@ -119,8 +126,13 @@ def find_matches(ref_file, session, max_matches=-1):
     print('Searching DB for test data with\n'+query_string)
     query_result = session.query(db.TestData).filter(*query_args)
     filenames = [result.filename for result in query_result]
-    print('Found {} instances:\n'.format(len(filenames))+'\n'.join(['\t'+f for f in filenames]))
-    if max_matches > 0:
-        print('Using first {} matches'.format(max_matches))
+    print('Found {} instances:'.format(len(filenames)), end="")
+    print('\n'+'\n'.join(['\t'+f for f in filenames]))
+    if filenames:
+        if max_matches > 0:
+            print('Using first {} matches'.format(max_matches))
+    else:
+        print('\tNo matches found')
+
     return filenames[:max_matches]
 

@@ -105,7 +105,7 @@ def load_session(db_path=None):
     # set up a session with the database
     if db_path is None:
         if REFTEST_DATA_DB is None:
-            print('REFTEST_DATA_DB is None, please specify a database')
+            print('REFTEST_DB is None, please specify a database')
             return None
         else:
             db_path = REFTEST_DATA_DB
@@ -148,4 +148,5 @@ def add_test_data(file_path, db_path=None, force=False):
             new_test_data = TestData(fname)
             session.add(new_test_data)
             session.commit()
+            print('Added {} to {}'.format(file_path, db_path))
 
