@@ -1,12 +1,18 @@
+# from . import log
+
 from astropy.io import fits
 import glob
 import os
 from sqlalchemy import Column, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
+# import logging
 
 __all__ = ['TestData', 'data_exists', 'load_session', 'create_test_data_db',
            'add_test_data']
+
+# log = logging.getLogger(__name__)
+# log.setLevel(logging.DEBUG)
 
 Base = declarative_base()
 
@@ -82,7 +88,7 @@ def data_exists(fname, session):
     return bool(query_result.count())
 
 
-def load_session(db_path):
+def load_session(db_path=None):
     """
     Create a new session with the test data DB.
     
@@ -97,10 +103,18 @@ def load_session(db_path):
 
     """
     # set up a session with the database
+    if db_path is None:
+        if REFTEST_DATA_DB is None:
+            print('REFTEST_DATA_DB is None, please specify a database')
+            return None
+        else:
+            db_path = REFTEST_DATA_DB
+
     engine = create_engine('sqlite:///{}'.format(db_path), echo=False)
     metadata = Base.metadata
     Session = sessionmaker(bind=engine)
     session = Session()
+    print('Connected to DB at {}'.format(db_path))
     return session
 
 
@@ -117,7 +131,7 @@ def create_test_data_db(db_path):
     Base.metadata.create_all(engine)
 
 
-def add_test_data(db_path, file_path, force=False):
+def add_test_data(file_path, db_path=None, force=False):
     """
     Add files to the test data DB.
     Parameters
@@ -129,7 +143,7 @@ def add_test_data(db_path, file_path, force=False):
     session = load_session(db_path)
     for fname in glob.glob(file_path):
         if data_exists(fname, session) and not force:
-            print('There is already a dataset with the same parameters')
+            print('There is already test data with the same parameters. To add the data anyway set force=True')
         else:
             new_test_data = TestData(fname)
             session.add(new_test_data)

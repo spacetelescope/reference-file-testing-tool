@@ -1,6 +1,7 @@
 """
 Module defining entry points for command line interface
 """
+
 from . import reftest
 from . import db
 
@@ -22,7 +23,10 @@ def test_reference_file(args=None):
     if data_file is not None:
         reftest.test_reference_file(ref_file, data_file)
     else:
-        data_files = reftest.find_matches(ref_file, res.max_matches)
+        session = db.load_session()
+        if session is None:
+            return
+        data_files = reftest.find_matches(ref_file, session, max_matches=res.max_matches)
         if data_files:
             for data_file in data_files:
                 reftest.test_reference_file(ref_file, data_file)
