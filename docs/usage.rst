@@ -20,19 +20,19 @@ If you don't want to manually supply test data each time you test a reference fi
 data for the Test Tool to automatically select from.
 
 The database uses SQLite and is managed with the SQLAlchemy package.  You can create an empty database with
-`create_reftest_db`.:
+``create_reftest_db``::
 
     create_reftest_db /path/to/save.db
 
-You can then add data to the database with `add_reftest_data`
+You can then add data to the database with ``add_reftest_data``::
 
     add_reftest_data /path/to/test/data.fits
 
 .. note::
 
-    By default `add_reftest_data` will not add data if there is an existing data set with the
+    By default ``add_reftest_data`` will not add data if there is an existing data set with the
     same FITS keywords (INSTRUME, DETECTOR, CHANNEL, FILTER, PUPIL, BAND, GRATING, EXP_TYPE, READPATT, SUBARRAY) already
-    in the database.  You can override this behaviour by passing the keyword argument ``force=True``.
+    in the database.  You can override this behaviour by passing the argument ``--force``.
 
 With a database created, set the environment variable ``REFTEST_DB`` to the path of the database, either in the shell or
 in your ``bashrc`` with::
