@@ -35,7 +35,7 @@ Using pip
 
 To install the Tool with `pip <http://www.pip-installer.org/en/latest/>`_, simply run::
 
-    pip install git+git://github.com/STScI-MESA/reference-file-testing-tool.git
+    pip install git+git://github.com/STScI-MESA/reference-file-testing-tool.git@v0.1
 
 Building from source
 --------------------
