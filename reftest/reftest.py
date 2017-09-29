@@ -1,15 +1,16 @@
 from __future__ import print_function
 from . import db
-# from . import log
 
+import os
 from jwst.pipeline import calwebb_dark, calwebb_sloper, calwebb_image2, calwebb_spec2
 import crds
 from astropy.io import fits
-# import logging
+import logging
 from sqlalchemy import or_
-
-# log = logging.getLogger(__name__)
-# log.setLevel(logging.DEBUG)
+try:
+    from cStringIO import StringIO      # Python 2
+except ImportError:
+    from io import StringIO
 
 meta_to_fits = {
     'META.INSTRUMENT.NAME': 'INSTRUME',
@@ -62,6 +63,14 @@ def test_reference_file(ref_file, data_file):
     data_file: str
         Path to data file.
     """
+
+    # redirect pipeline log from sys.stderr to a string
+    log_stream = StringIO()
+    stpipe_log = logging.Logger.manager.loggerDict['stpipe']
+    stpipe_log.handlers[0].stream = log_stream
+
+    # allow invalid keyword values
+    os.environ['PASS_INVALID_VALUES'] = '1'
 
     print('Testing {}'.format(data_file))
     result = data_file
