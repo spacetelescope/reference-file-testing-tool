@@ -3,6 +3,7 @@ from . import db
 
 import os
 from jwst.pipeline import calwebb_dark, calwebb_sloper, calwebb_image2, calwebb_spec2
+from jwst import datamodels
 import crds
 from astropy.io import fits
 import logging
@@ -11,6 +12,19 @@ try:
     from cStringIO import StringIO      # Python 2
 except ImportError:
     from io import StringIO
+
+p_mapping = {
+    "META.EXPOSURE.TYPE": "META.EXPOSURE.P_EXPTYPE",
+    "META.INSTRUMENT.BAND": "META.INSTRUMENT.P_BAND",
+    "META.INSTRUMENT.DETECTOR": "META.INSTRUMENT.P_DETECTOR",
+    "META.INSTRUMENT.CHANNEL": "META.INSTRUMENT.P_CHANNEL",
+    "META.INSTRUMENT.FILTER": "META.INSTRUMENT.P_FILTER",
+    "META.INSTRUMENT.PUPIL": "META.INSTRUMENT.P_PUPIL",
+    "META.INSTRUMENT.MODULE": "META.INSTRUMENT.P_MODULE",
+    "META.SUBARRAY.NAME": "META.SUBARRAY.P_SUBARRAY",
+    "META.INSTRUMENT.GRATING": "META.INSTRUMENT.P_GRATING",
+    "META.EXPOSURE.READPATT": "META.EXPOSURE.P_READPATT",
+}
 
 meta_to_fits = {
     'META.INSTRUMENT.NAME': 'INSTRUME',
@@ -42,12 +56,12 @@ def get_pipelines(exp_type):
         return [calwebb_sloper.SloperPipeline(), calwebb_spec2.Spec2Pipeline()]
 
 def override_reference_file(ref_file, pipeline):
-    header = fits.getheader(ref_file)
+    dm = datamodels.open(ref_file)
     for step in pipeline.step_defs.keys():
         # check if a step has an override_<reftype> option
-        if hasattr(getattr(pipeline, step), 'override_{}'.format(header['REFTYPE'].lower())):
-            setattr(getattr(pipeline, step), 'override_{}'.format(header['REFTYPE'].lower()), ref_file)
-            print('Setting {} in {} step'.format('override_{}'.format(header['REFTYPE'].lower()), step))
+        if hasattr(getattr(pipeline, step), 'override_{}'.format(dm.meta.reftype)):
+            setattr(getattr(pipeline, step), 'override_{}'.format(dm.meta.reftype), ref_file)
+            print('Setting {} in {} step'.format('override_{}'.format(dm.meta.reftype), step))
 
     return pipeline
 
@@ -104,11 +118,11 @@ def find_matches(ref_file, session, max_matches=None):
         a list of filenames
 
     """
-    header = fits.getheader(ref_file)
+    dm = datamodels.open(ref_file)
     context = crds.heavy_client.get_processing_mode('jwst')[1]
     pmap = crds.rmap.load_mapping(context)
-    imap = pmap.get_imap(header['INSTRUME'])
-    rmap = imap.get_rmap(header['REFTYPE'])
+    imap = pmap.get_imap(dm.meta.instrument.name)
+    rmap = imap.get_rmap(dm.meta.reftype)
     meta_attrs = rmap.get_required_parkeys()
     meta_attrs.remove('META.OBSERVATION.DATE')
     meta_attrs.remove('META.OBSERVATION.TIME')
@@ -116,22 +130,28 @@ def find_matches(ref_file, session, max_matches=None):
     query_args = []
     keys_used = []
     for attr in meta_attrs:
-        # Ignore special CRDS-only values
-        if header[meta_to_fits[attr]] in ['GENERIC', 'N/A', 'ANY']:
-            pass
 
         # Deal with OR values
-        elif '|' in header[meta_to_fits[attr]]:
-            or_vals = header[meta_to_fits[attr]].split('|')
-            query_args.append(or_(getattr(db.TestData, meta_to_fits[attr]) == val for val in or_vals))
-            keys_used.append(meta_to_fits[attr])
+        if p_mapping[attr].lower() in dm.to_flat_dict():
+            p_attr = p_mapping[attr]
+
+            if '|' in dm[p_attr.lower()]:
+
+                or_vals = dm[p_attr.lower()].split('|')[:-1]
+                or_vals = [val.strip() for val in or_vals]
+                query_args.append(or_(getattr(db.TestData, meta_to_fits[attr]) == val for val in or_vals))
+                keys_used.append([meta_to_fits[attr], dm[p_attr.lower()]])
+
+        # Ignore special CRDS-only values
+        elif dm[attr.lower()] in ['GENERIC', 'N/A', 'ANY']:
+            pass
 
         # Normal values
         else:
-            query_args.append(getattr(db.TestData, meta_to_fits[attr]) == header[meta_to_fits[attr]])
-            keys_used.append(meta_to_fits[attr])
+            query_args.append(getattr(db.TestData, meta_to_fits[attr]) == dm[attr.lower()])
+            keys_used.append([meta_to_fits[attr], dm[attr.lower()]])
 
-    query_string = '\n'.join(['\t{} = {}'.format(key, header[key]) for key in keys_used])
+    query_string = '\n'.join(['\t{} = {}'.format(key[0], key[1]) for key in keys_used])
     print('Searching DB for test data with\n'+query_string)
     query_result = session.query(db.TestData).filter(*query_args)
     filenames = [result.filename for result in query_result]
