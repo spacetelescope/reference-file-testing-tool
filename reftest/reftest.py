@@ -2,7 +2,13 @@ from __future__ import print_function
 from . import db
 
 import os
-from jwst.pipeline import calwebb_dark, calwebb_sloper, calwebb_image2, calwebb_spec2
+from jwst.pipeline import calwebb_dark, calwebb_image2, calwebb_spec2
+
+try:
+    from jwst.pipeline import SloperPipeline as Detector1Pipeline
+except ImportError:
+    from jwst.pipeline import Detector1Pipeline
+
 from jwst import datamodels
 import crds
 from astropy.io import fits
@@ -49,11 +55,11 @@ def get_pipelines(exp_type):
     if 'DARK' in exp_type:
         return [calwebb_dark.DarkPipeline()]
     elif 'FLAT' in exp_type:
-        return [calwebb_sloper.SloperPipeline()]
+        return [Detector1Pipeline()]
     elif exp_type.lower() in IMAGING:
-        return [calwebb_sloper.SloperPipeline(), calwebb_image2.Image2Pipeline()]
+        return [Detector1Pipeline(), calwebb_image2.Image2Pipeline()]
     else:
-        return [calwebb_sloper.SloperPipeline(), calwebb_spec2.Spec2Pipeline()]
+        return [Detector1Pipeline(), calwebb_spec2.Spec2Pipeline()]
 
 def override_reference_file(ref_file, pipeline):
     dm = datamodels.open(ref_file)
