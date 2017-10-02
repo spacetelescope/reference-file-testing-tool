@@ -6,6 +6,9 @@ from . import reftest
 from . import db
 
 import argparse
+from multiprocessing import Pool
+from functools import partial
+import numpy as np
 
 def test_reference_file(args=None):
     parser = argparse.ArgumentParser(
@@ -15,6 +18,7 @@ def test_reference_file(args=None):
     parser.add_argument('--data', help='data to run pipeline with', default=None)
     parser.add_argument('--max-matches', help='maximum number of data sets to test', default=None)
     parser.add_argument('--db-path', help='path to database of test data', default=None)
+    parser.add_argument('--n', help='number of processes to use', default=None)
 
     res = parser.parse_args(args)
 
@@ -29,8 +33,13 @@ def test_reference_file(args=None):
             return
         data_files = reftest.find_matches(ref_file, session, max_matches=res.max_matches)
         if data_files:
-            for data_file in data_files:
-                success += reftest.test_reference_file(ref_file, data_file)
+            if res.n:
+                p = Pool(res.n)
+                success = p.map(partial(reftest.test_reference_file, ref_file), data_files)
+                success = np.sum(success)
+            else:
+                for data_file in data_files:
+                    success += reftest.test_reference_file(ref_file, data_file)
             print('Tests successful for {}/{} files'.format(success, len(data_files)))
 
     return success
