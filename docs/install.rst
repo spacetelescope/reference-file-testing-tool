@@ -17,14 +17,17 @@ The Reference File Testing Tool has the following dependencies:
 Installing the Reference File Testing Tool
 ==========================================
 
-The Tool is currently in early development and must be installed from the GitHub development repository.
+Using conda
+-----------
 
-Using pip
----------
+To install the Tool with ``conda``, start with a JWST Calibration Pipeline environment, for example::
 
-To install the Tool with `pip <http://www.pip-installer.org/en/latest/>`_, simply run::
+    conda create -n jwst-0.7.8rc2 --file http://ssb.stsci.edu/releases/jwstdp/0.7.8/dev/jwstdp-0.7.8rc2-osx-py27.0.txt
 
-    pip install git+git://github.com/STScI-MESA/reference-file-testing-tool.git@v0.1
+Then install the tool from the ``stsci-mesa`` channel::
+
+    source activate jwst-0.7.8rc2
+    conda install --channel stsci-mesa reftest
 
 Building from source
 --------------------
