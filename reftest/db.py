@@ -143,7 +143,7 @@ def add_test_data(file_path, db_path=None, force=False, replace=False):
     session = load_session(db_path)
     for fname in glob.glob(file_path):
         query_result = data_exists(fname, session)
-        if query_result and not (force or replace):
+        if query_result.count() != 0 and not (force or replace):
             print('There is already test data with the same parameters. To add the data anyway set force=True')
         elif query_result and replace:
             session.delete(query_result.first())
