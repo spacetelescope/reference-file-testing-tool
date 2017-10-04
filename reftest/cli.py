@@ -40,13 +40,14 @@ def test_reference_file(args=None):
                 for data_file in data_files:
                     success.append(reftest.test_reference_file(ref_file, data_file))
             print('Tests successful for {}/{} files'.format(np.sum(success), len(data_files)))
-            print('The following failed:')
-            for f, result in zip(data_files, success):
-                if not result:
-                    print('\t'+f)
-
-
-    return np.sum(success)
+            if np.sum(success) == len(data_files):
+                return True
+            else:
+                print('The following failed:')
+                for f, result in zip(data_files, success):
+                    if not result:
+                        print('\t'+f)
+                return False
 
 
 def create_test_data_db(args=None):
