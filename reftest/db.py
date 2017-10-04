@@ -155,5 +155,5 @@ def add_test_data(file_path, db_path=None, force=False, replace=False):
             new_test_data = TestData(fname)
             session.add(new_test_data)
             session.commit()
-            print('Added {} to {}'.format(file_path, db_path))
+            print('Added {} to database'.format(file_path))
 
