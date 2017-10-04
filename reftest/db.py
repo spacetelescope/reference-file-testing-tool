@@ -41,7 +41,7 @@ class TestData(Base):
         # you don't have to create an __init__()
         # but it makes it easier to create a new row
         # from a FITS file
-        self.filename = filename
+        self.filename = os.path.abspath(filename)
         header = fits.getheader(filename)
         self.DATE_OBS = header.get('DATE-OBS')
         self.TIME_OBS = header.get('TIME-OBS')
@@ -85,7 +85,7 @@ def data_exists(fname, session):
     args['READPATT'] = header.get('READPATT')
     args['SUBARRAY'] = header.get('SUBARRAY')
     query_result = session.query(TestData).filter_by(**args)
-    return bool(query_result.count())
+    return query_result
 
 
 def load_session(db_path=None):
@@ -131,7 +131,7 @@ def create_test_data_db(db_path):
     Base.metadata.create_all(engine)
 
 
-def add_test_data(file_path, db_path=None, force=False):
+def add_test_data(file_path, db_path=None, force=False, replace=False):
     """
     Add files to the test data DB.
     Parameters
@@ -142,8 +142,15 @@ def add_test_data(file_path, db_path=None, force=False):
 
     session = load_session(db_path)
     for fname in glob.glob(file_path):
-        if data_exists(fname, session) and not force:
+        query_result = data_exists(fname, session)
+        if query_result and not (force or replace):
             print('There is already test data with the same parameters. To add the data anyway set force=True')
+        elif query_result and replace:
+            session.delete(query_result.first())
+            session.add(TestData(fname))
+            session.commit()
+            print('Replaced {} with {}'.format(query_result.first().filename,
+                                               file_path, db_path))
         else:
             new_test_data = TestData(fname)
             session.add(new_test_data)
