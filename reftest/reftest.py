@@ -29,7 +29,7 @@ p_mapping = {
     "META.INSTRUMENT.MODULE": "META.INSTRUMENT.P_MODULE",
     "META.SUBARRAY.NAME": "META.SUBARRAY.P_SUBARRAY",
     "META.INSTRUMENT.GRATING": "META.INSTRUMENT.P_GRATING",
-    "META.EXPOSURE.READPATT": "META.EXPOSURE.P_READPATT",
+    "META.EXPOSURE.READPATT": "META.EXPOSURE.P_READPATT"
 }
 
 meta_to_fits = {
@@ -47,7 +47,7 @@ meta_to_fits = {
 IMAGING = ['fgs_image', 'fgs_focus', 'fgs_skyflat', 'fgs_intflat', 'mir_image',
            'mir_tacq', 'mir_lyot', 'mir_4qpm', 'mir_coroncal', 'nrc_image',
            'nrc_tacq', 'nrc_coron', 'nrc_taconfirm', 'nrc_focus', 'nrc_tsimage',
-           'nis_image', 'nis_ami', 'nis_tacq', 'nis_taconfirm', 'nis_focus',
+           'nis_image', 'nis_dark', 'nis_ami', 'nis_tacq', 'nis_taconfirm', 'nis_focus',
            'nrs_tacq', 'nrs_taslit', 'nrs_taconfirm', 'nrs_confirm', 'nrs_image',
            'nrs_focus', 'nrs_mimf', 'nrs_bota']
 
