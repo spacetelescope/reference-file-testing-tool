@@ -36,6 +36,11 @@ class TestData(Base):
     PUPIL = Column(String(20))
     GRATING = Column(String(20))
     SUBARRAY = Column(String(20))
+    SUBSTRT1 = Column(String(20))
+    SUBSTRT2 = Column(String(20))
+    SUBSIZE1 = Column(String(20))
+    SUBSIZE2 = Column(String(20))
+
 
     def __init__(self, filename):
         # you don't have to create an __init__()
@@ -55,6 +60,10 @@ class TestData(Base):
         self.EXP_TYPE = header.get('EXP_TYPE')
         self.READPATT = header.get('READPATT')
         self.SUBARRAY = header.get('SUBARRAY')
+        self.SUBSTRT1 = header.get('SUBSTRT1')
+        self.SUBSTRT2 = header.get('SUBSTRT2')
+        self.SUBSIZE1 = header.get('SUBSIZE1')
+        self.SUBSIZE2 = header.get('SUBSIZE2')
 
 def data_exists(fname, session):
     """
@@ -84,6 +93,11 @@ def data_exists(fname, session):
     args['EXP_TYPE'] = header.get('EXP_TYPE')
     args['READPATT'] = header.get('READPATT')
     args['SUBARRAY'] = header.get('SUBARRAY')
+    args['SUBSTRT1'] = header.get('SUBSTRT1')
+    args['SUBSTRT2'] = header.get('SUBSTRT2')
+    args['SUBSIZE1'] = header.get('SUBSIZE1')
+    args['SUBSIZE2'] = header.get('SUBSIZE2')
+           
     query_result = session.query(TestData).filter_by(**args)
     return query_result
 
