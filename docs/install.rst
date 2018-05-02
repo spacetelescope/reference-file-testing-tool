@@ -36,7 +36,7 @@ The latest development version of the Tool can be cloned from GitHub using this 
 
     git clone git://github.com/STScI-MESA/reference-file-testing-tool.git
     
-To update the tool you can do within your sandbox
+To update the tool you can do within your sandbox::
     
     git pull
 
