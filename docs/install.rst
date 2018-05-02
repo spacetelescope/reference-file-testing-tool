@@ -6,7 +6,7 @@ Requirements
 ============
 The Reference File Testing Tool has the following dependencies:
 
-- `Python <http://www.python.org/>`_ 2.7
+- `Python <http://www.python.org/>`_ 3.5
 
 - `SQLAlchemy <http://www.sqlalchemy.org/>`_
 
@@ -35,6 +35,10 @@ Building from source
 The latest development version of the Tool can be cloned from GitHub using this command::
 
     git clone git://github.com/STScI-MESA/reference-file-testing-tool.git
+    
+To update the tool you can do within your sandbox
+    
+    git pull
 
 To install the Tool (from the root of the source tree)::
 
