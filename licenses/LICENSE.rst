@@ -1,4 +1,4 @@
-Copyright (c) year, Matthew Hill
+Copyright (c) year, STScI
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
