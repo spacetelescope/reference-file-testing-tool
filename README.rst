@@ -35,14 +35,14 @@ Using pip
 
 To install the Tool with `pip <http://www.pip-installer.org/en/latest/>`_, simply run::
 
-    pip install git+git://github.com/STScI-MESA/reference-file-testing-tool.git@v0.1
+    pip install git+git://github.com/spacetelescope/reference-file-testing-tool.git@v0.1
 
 Building from source
 --------------------
 
 The latest development version of the Tool can be cloned from GitHub using this command::
 
-    git clone git://github.com/STScI-MESA/reference-file-testing-tool.git
+    git clone git://github.com/spacetelescope/reference-file-testing-tool.git
 
 To install the Tool (from the root of the source tree)::
 
@@ -63,4 +63,4 @@ uncalibrated data overriding the default reference file with the one supplied.
 License
 -------
 
-This project is Copyright (c) Matthew Hill and licensed under the terms of the BSD 3-Clause license. See the licenses folder for more information.
+This project is Copyright (c) Association of Universities for Research in Astronomy (AURA) and licensed under the terms of the BSD 3-Clause license. See the licenses folder for more information.
