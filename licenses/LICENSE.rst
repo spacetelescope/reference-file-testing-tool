@@ -1,4 +1,6 @@
-Copyright (c) year, STScI
+BSD 3-Clause License
+
+Copyright (c) 2018, Association of Universities for Research in Astronomy.  
 All rights reserved.
 
 Redistribution and use in source and binary forms, with or without modification,
