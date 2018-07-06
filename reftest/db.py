@@ -1,6 +1,20 @@
-# from . import log
+""" Database utility scripts
+
+Usage:
+  db_utils (create | remove) <db_path>
+  db_utils (add | replace | force) <db_path> <file_path>
+
+Arguments:
+  <db_path>     Absolute path to database. 
+  <file_path>   Absolute path to fits file to add. 
+
+Options:
+  -h --help     Show this screen.
+  --version     Show version.
+"""
 
 from astropy.io import fits
+from docopt import docopt
 import glob
 import os
 from sqlalchemy import Column, Integer, String, create_engine
@@ -119,7 +133,7 @@ def load_session(db_path=None):
     # set up a session with the database
     if db_path is None:
         if REFTEST_DATA_DB is None:
-            print('REFTEST_DB is None, please specify a database')
+            print("REFTEST_DB is None, please specify a database")
             return None
         else:
             db_path = REFTEST_DATA_DB
@@ -128,7 +142,7 @@ def load_session(db_path=None):
     metadata = Base.metadata
     Session = sessionmaker(bind=engine)
     session = Session()
-    print('Connected to DB at {}'.format(db_path))
+    print("Connected to DB at {}".format(db_path))
     return session
 
 
@@ -139,20 +153,31 @@ def create_test_data_db(db_path):
     Parameters
     ----------
     db_path: str
-        Where to save the DB
+        Absolute path to save the DB
     """
-    print('Hello World')
+
     engine = create_engine('sqlite:///{}'.format(db_path), echo=False)
     Base.metadata.create_all(engine)
-
+    print("CREATED DB: {}".format(db_path))
 
 def add_test_data(file_path, db_path=None, force=False, replace=False):
     """
     Add files to the test data DB.
+    
     Parameters
     ----------
     file_path: str
         Globable file string for test data
+    db_path: str
+        Path to database on local machince
+    force: bool
+        Force add to db even if file shares same field entries
+    replace: bool
+        Replace file in database with file_path
+
+    Returns
+    -------
+    None
     """
 
     session = load_session(db_path)
@@ -165,13 +190,36 @@ def add_test_data(file_path, db_path=None, force=False, replace=False):
             session.add(TestData(fname))
             session.commit()
             print('Replaced {} with {}'.format(query_result.first().filename,
-                                               file_path, db_path))
+                                               file_path))
         else:
             new_test_data = TestData(fname)
             session.add(new_test_data)
             session.commit()
             print('Added {} to database'.format(file_path))
 
-def test_print_function_entry():
-    print('Wow, you got it to work')
+def main():
+    """ Main to parse command line entries.
 
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    args = docopt(__doc__, version='0.1')
+
+    # Parse command line arguments
+    if args['create']:
+        create_test_data_db(args['<db_path>'])
+    elif args['add'] or args['force'] or args['replace']:
+        add_test_data(args['<file_path>'], 
+                      db_path=args['<db_path>'], 
+                      force=args['force'], 
+                      replace=args['replace'])
+    else:
+        # Make sure to check db_path ends with .db, dont want to delete other
+        # files that aren't databases....
+        os.remove(args['<db_path>'])
+        print("DELETED DB {}".format(args['<db_path>']))
