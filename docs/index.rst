@@ -1,30 +1,15 @@
-#########################################
-Reference File Testing Tool Documentation
-#########################################
+Documentation
+=============
 
-Welcome to the Reference File Testing Tool documentation! The Reference File Testing Tool is a python package for
-testing JWST Calibration reference files before delivery to Calibration Reference Data System (CRDS).
+This is the documentation for reftest.
 
-.. _getting_started:
-
-***************
-Getting Started
-***************
 
 .. toctree::
-   :maxdepth: 1
+  :maxdepth: 2
 
-   install
-   usage
+  reftest/index.rst
 
-.. _user-docs:
-
-******************
-User Documentation
-******************
-
-.. toctree::
-  :maxdepth: 1
-
-  reftest/index
-  db/index
+.. note:: The layout of this directory is simply a suggestion.  To follow
+          traditional practice, do *not* edit this page, but instead place
+          all documentation for the package inside ``reftest/``.
+          You can follow this practice or choose your own layout.

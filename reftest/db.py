@@ -141,6 +141,7 @@ def create_test_data_db(db_path):
     db_path: str
         Where to save the DB
     """
+    print('Hello World')
     engine = create_engine('sqlite:///{}'.format(db_path), echo=False)
     Base.metadata.create_all(engine)
 
@@ -170,4 +171,7 @@ def add_test_data(file_path, db_path=None, force=False, replace=False):
             session.add(new_test_data)
             session.commit()
             print('Added {} to database'.format(file_path))
+
+def test_print_function_entry():
+    print('Wow, you got it to work')
 
