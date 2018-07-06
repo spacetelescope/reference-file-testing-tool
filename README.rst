@@ -1,5 +1,5 @@
-Test reference files against JWST Calibration Pipeline.
--------------------------------------------------------
+reference file testing tool
+---------------------------
 
 .. image:: http://img.shields.io/badge/powered%20by-AstroPy-orange.svg?style=flat
     :target: http://www.astropy.org
@@ -11,7 +11,7 @@ Test reference files against JWST Calibration Pipeline.
 License
 -------
 
-This project is Copyright (c) Matthew Hill, Mees Fix and licensed under
+This project is Copyright (c) Mees Fix and licensed under
 the terms of the BSD 3-Clause license. This package is based upon
 the `Astropy package template <https://github.com/astropy/package-template>`_
 which is licensed under the BSD 3-clause licence. See the licenses folder for
