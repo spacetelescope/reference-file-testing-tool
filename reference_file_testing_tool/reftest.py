@@ -1,7 +1,7 @@
 """Script for testing reference files
 
 Usage:
-  test_ref_file <ref_file> <db_path> [--data=<fname>] [--max_matches=<match>] [--num_cpu=<n>]
+  test_ref_file <ref_file> <db_path> [--data=<fname>] [--max_matches=<match>] [--num_cpu=<n>] [--email=<addr>]
   
 Arguments:
   <db_path>     Absolute path to database. 
@@ -13,6 +13,7 @@ Options:
   --data=<fname>             data to run pipeline with
   --max_matches=<match>      maximum number of data sets to test [default: 10]
   --num_cpu=<n>              number of cores to use [default: 5]
+  --email=<addr>             email results from job with html table.
 """
 
 from __future__ import print_function
@@ -22,6 +23,7 @@ import os
 from astropy.io import fits
 import crds
 from dask import compute, delayed
+from dask.diagnostics import ProgressBar
 from docopt import docopt
 from email.headerregistry import Address
 from email.message import EmailMessage
@@ -41,7 +43,7 @@ from sqlalchemy import or_
 
 # Remove python 2 dependencies in the future..
 try:
-    from cStringIO import StringIO      # Python 2
+    from cStringIO import StringIO
 except ImportError:
     from io import StringIO
 
@@ -240,25 +242,27 @@ def find_matches(ref_file, session, max_matches=-1):
 
     return filenames[:max_matches]
     
-def send_email(data_for_email):
+def send_email(data_for_email, addr):
     """Send nicely formatted pandas dataframe as html table via email when
-    reference test job is done.
+    reference file test job is done.
 
     Parameters
     ----------
     data_for_email: list
-        List of objects to create dataframe out of
-    
+        List of dictionaries to create dataframe out of
+    addr: str
+        Email address
     Returns
     -------
     None
     """
     
+    pd.set_option('display.max_colwidth', -1)
     html_tb = pd.DataFrame(data_for_email).to_html(justify='center',index=False)
     msg = EmailMessage()
     msg['Subject'] = 'Results From JWST Reference File Testing.'
     msg['From'] = Address('', 'mfix', 'stsci.edu')
-    msg['To'] = Address('', 'mfix', 'stsci.edu')
+    msg['To'] = Address('', addr, 'stsci.edu')
     body_str = """
         <html>
             <head></head>
@@ -287,33 +291,33 @@ def main():
     # Get docopt arguments..
     args = docopt(__doc__, version='0.1')
 
-    success = []
     ref_file = args['<ref_file>']
     data_file = args['--data']
     
+    # if you only want to test one JWST file against ref file
+    # else, search DB for files that will be effected by new ref file
     if data_file is not None:
-        success.append(test_reference_file(ref_file, data_file))
+        file_to_cal = delayed(test_reference_file)(ref_file, data_file)
+        file_to_cal.compute()
     else:
         session = db.load_session(db_path=args['<db_path>'])
         data_files = find_matches(ref_file, session, max_matches=int(args['--max_matches']))
         
+        # If files are returned, build list of objects to process
         if data_files:
             delayed_data_files = [delayed(test_reference_file)(ref_file, fname) 
                                   for fname in data_files]
-            if args['--num_cpu']:
+            
+            # Compute results in parallel.
+            print("Performing Calibration...")
+            with ProgressBar():
                 tab_data = compute(delayed_data_files, num_workers=int(args['--num_cpu']))[0]
-                send_email(tab_data)
-            else:
-                for f in data_files:
-                    success.append(test_reference_file(ref_file, f))
             
-            print('Tests successful for {}/{} files'.format(np.sum(success), len(data_files)))
             
-            if np.sum(success) == len(data_files):
-                return True
+            # Put if else block to specify wheter user wants email or not.
+            # If not, print results to screen.
+            if args['--email']:
+                send_email(tab_data, args['--email'])
             else:
-                print('The following failed:')
-                for f, result in zip(data_files, success):
-                    if not result:
-                        print('\t'+f)
-                return False
+                pd.set_option('display.max_colwidth', -1)
+                print(pd.DataFrame(tab_data))

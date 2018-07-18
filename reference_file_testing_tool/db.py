@@ -182,7 +182,7 @@ def bulk_populate(file_path, db_path):
     
     data = build_dask_delayed_list(TestData, final_paths)
     
-    print("EXTRACTING KEYWORDS....")s
+    print("EXTRACTING KEYWORDS....")
     with ProgressBar():
         data_to_insert = compute(data)[0]
     
