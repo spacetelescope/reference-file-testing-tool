@@ -257,11 +257,17 @@ def send_email(data_for_email, addr):
     None
     """
     
+    # Make sure to strip the username from the domain if full email given.
+    if '@' in addr:
+        addr = line.split("@")[0]
+    else:
+        addr = addr
+    
     pd.set_option('display.max_colwidth', -1)
     html_tb = pd.DataFrame(data_for_email).to_html(justify='center',index=False)
     msg = EmailMessage()
     msg['Subject'] = 'Results From JWST Reference File Testing.'
-    msg['From'] = Address('', 'mfix', 'stsci.edu')
+    msg['From'] = Address('', addr, 'stsci.edu')
     msg['To'] = Address('', addr, 'stsci.edu')
     body_str = """
         <html>
