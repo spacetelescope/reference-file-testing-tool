@@ -121,6 +121,7 @@ def walk_filesystem(data_dir):
                  'dark.fits']
 
     for root, dirs, files in os.walk(data_dir):
+        # Join path + filename for files if extension is in filetypes.
         full_paths = [os.path.join(root, filename) 
                       for filename in files 
                       if any(
@@ -154,7 +155,7 @@ def find_all_datasets(top_dir):
         if pattern.match(item) is not None:
             top_levels.append(full_path)
     
-    results = build_dask_delayed_list(walk_filesystem, top_levels[:2])
+    results = build_dask_delayed_list(walk_filesystem, top_levels)
     
     with ProgressBar():
         final_paths = list(itertools.chain(*compute(results)[0]))
@@ -181,7 +182,7 @@ def bulk_populate(file_path, db_path):
     
     data = build_dask_delayed_list(TestData, final_paths)
     
-    print("EXTRACTING KEYWORDS....")
+    print("EXTRACTING KEYWORDS....")s
     with ProgressBar():
         data_to_insert = compute(data)[0]
     

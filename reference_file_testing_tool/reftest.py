@@ -1,7 +1,31 @@
+"""Script for testing reference files
+
+Usage:
+  test_ref_file <ref_file> <db_path> [--data=<fname>] [--max_matches=<match>] [--num_cpu=<n>]
+  
+Arguments:
+  <db_path>     Absolute path to database. 
+  <file_path>   Absolute path to fits file to add. 
+
+Options:
+  -h --help                  Show this screen.
+  --version                  Show version.
+  --data=<fname>             data to run pipeline with
+  --max_matches=<match>      maximum number of data sets to test [default: 10]
+  --num_cpu=<n>              number of cores to use [default: 5]
+"""
+
 from __future__ import print_function
-from . import db
 
 import os
+
+from astropy.io import fits
+import crds
+from dask import compute, delayed
+from docopt import docopt
+from email.headerregistry import Address
+from email.message import EmailMessage
+from jwst import datamodels
 from jwst.pipeline import calwebb_dark, calwebb_image2, calwebb_spec2
 
 try:
@@ -9,15 +33,19 @@ try:
 except ImportError:
     from jwst.pipeline import Detector1Pipeline
 
-from jwst import datamodels
-import crds
-from astropy.io import fits
 import logging
+import numpy as np
+import pandas as pd
+import smtplib
 from sqlalchemy import or_
+
+# Remove python 2 dependencies in the future..
 try:
     from cStringIO import StringIO      # Python 2
 except ImportError:
     from io import StringIO
+
+from . import db
 
 p_mapping = {
     "META.EXPOSURE.TYPE": "META.EXPOSURE.P_EXPTYPE",
@@ -32,6 +60,7 @@ p_mapping = {
     "META.EXPOSURE.READPATT": "META.EXPOSURE.P_READPATT"
 }
 
+
 meta_to_fits = {
     'META.INSTRUMENT.NAME': 'INSTRUME',
     'META.EXPOSURE.READPATT': 'READPATT',
@@ -44,6 +73,7 @@ meta_to_fits = {
     'META.SUBARRAY.NAME': 'SUBARRAY'
 }
 
+
 IMAGING = ['fgs_image', 'fgs_focus', 'fgs_skyflat', 'fgs_intflat', 'mir_image',
            'mir_tacq', 'mir_lyot', 'mir_4qpm', 'mir_coroncal', 'nrc_image',
            'nrc_tacq', 'nrc_coron', 'nrc_taconfirm', 'nrc_focus', 'nrc_tsimage',
@@ -52,14 +82,30 @@ IMAGING = ['fgs_image', 'fgs_focus', 'fgs_skyflat', 'fgs_intflat', 'mir_image',
            'nrs_focus', 'nrs_mimf', 'nrs_bota']
 
 def get_pipelines(exp_type):
+    """Sorts which pipeline to use based on exp_type
+
+    Parameters
+    ----------
+    exp_type: str
+        JWST exposure type
+    
+    Returns
+    -------
+    pipeline: list
+        Pipeline(s) to return for calibrating files.
+    """
+
     if 'DARK' in exp_type:
-        return [calwebb_dark.DarkPipeline()]
+        pipeline = [calwebb_dark.DarkPipeline()]
     elif 'FLAT' in exp_type:
-        return [Detector1Pipeline()]
+        pipeline = [Detector1Pipeline()]
     elif exp_type.lower() in IMAGING:
-        return [Detector1Pipeline(), calwebb_image2.Image2Pipeline()]
+        pipeline = [Detector1Pipeline(), calwebb_image2.Image2Pipeline()]
     else:
-        return [Detector1Pipeline(), calwebb_spec2.Spec2Pipeline()]
+        pipeline = [Detector1Pipeline(), calwebb_spec2.Spec2Pipeline()]
+
+    return pipeline
+
 
 def override_reference_file(ref_file, pipeline):
     dm = datamodels.open(ref_file)
@@ -72,8 +118,7 @@ def override_reference_file(ref_file, pipeline):
     return pipeline
 
 def test_reference_file(ref_file, data_file):
-    """
-    Override CRDS reference file with the supplied reference file and run
+    """Override CRDS reference file with the supplied reference file and run
     pipeline with supplied data file.
     
     Parameters
@@ -82,34 +127,45 @@ def test_reference_file(ref_file, data_file):
         Path to reference file.
     data_file: str
         Path to data file.
+    
+    Returns
+    -------
+    result_meta: dict
+        Dictionary with results from run.
     """
 
     # redirect pipeline log from sys.stderr to a string
     log_stream = StringIO()
     stpipe_log = logging.Logger.manager.loggerDict['stpipe']
     stpipe_log.handlers[0].stream = log_stream
-
+    
     # allow invalid keyword values
     os.environ['PASS_INVALID_VALUES'] = '1'
 
-    print('Testing {}'.format(data_file))
-    result = data_file
+    path, filename = os.path.split(data_file)
+    result_meta = {'Path': path,
+                   'Filename': filename}
+
     try:
         for pipeline in get_pipelines(fits.getheader(data_file)['EXP_TYPE']):
             pipeline = override_reference_file(ref_file, pipeline)
-            print('Running {}'.format(pipeline))
             result = pipeline.run(result)
-            print('Completed {}'.format(pipeline))
-
-        return 1
+        
+        result_meta['Test_Status'] = 'PASSED'
+        result_meta['Error_Msg'] = None
+        
+        return result_meta
 
     except Exception as err:
-        print('{} failed with error {}'.format(data_file, (err.message)))
-        return 0
+        result_meta['Test_Status'] = 'FAILED'
+        result_meta['Error_Msg'] = str(err)
+        
+        return result_meta
 
 
-def find_matches(ref_file, session, max_matches=None):
-    """
+def find_matches(ref_file, session, max_matches=-1):
+    """Find matches in user provided database based on header keywords
+    inside of user provided reference file.
     
     Parameters
     ----------
@@ -122,22 +178,32 @@ def find_matches(ref_file, session, max_matches=None):
     -------
     matches: list
         a list of filenames
-
     """
+
+    # Create a JWST datamodel based off of the reference file.
     dm = datamodels.open(ref_file)
+    
+    # Get the calibration context, pipeline map (pmap), instrument map (imap)
+    # and reference map (rmap). For more detail on these maps, visit:
+    # https://hst-crds.stsci.edu/static/users_guide/rmap_syntax.html
     context = crds.heavy_client.get_processing_mode('jwst')[1]
     pmap = crds.rmap.load_mapping(context)
     imap = pmap.get_imap(dm.meta.instrument.name)
     rmap = imap.get_rmap(dm.meta.reftype)
+    
     meta_attrs = rmap.get_required_parkeys()
     meta_attrs.remove('META.OBSERVATION.DATE')
     meta_attrs.remove('META.OBSERVATION.TIME')
 
     query_args = []
     keys_used = []
+    
     for attr in meta_attrs:
+        
+        # Hack to get around MIRI Dark Issue for now.
+        if attr in ['META.EXPOSURE.READPATT', 'META.SUBARRAY.NAME']:
+            continue
 
-        # Deal with OR values
         if p_mapping[attr].lower() in dm.to_flat_dict():
             p_attr = p_mapping[attr]
 
@@ -159,10 +225,13 @@ def find_matches(ref_file, session, max_matches=None):
 
     query_string = '\n'.join(['\t{} = {}'.format(key[0], key[1]) for key in keys_used])
     print('Searching DB for test data with\n'+query_string)
+    
     query_result = session.query(db.TestData).filter(*query_args)
-    filenames = [result.filename for result in query_result]
+    filenames = [os.path.join(result.path, result.filename) for result in query_result]
+    
     print('Found {} instances:'.format(len(filenames)), end="")
     print('\n'+'\n'.join(['\t'+f for f in filenames]))
+    
     if filenames:
         if max_matches > 0:
             print('Using first {} matches'.format(max_matches))
@@ -170,4 +239,81 @@ def find_matches(ref_file, session, max_matches=None):
         print('\tNo matches found')
 
     return filenames[:max_matches]
+    
+def send_email(data_for_email):
+    """Send nicely formatted pandas dataframe as html table via email when
+    reference test job is done.
 
+    Parameters
+    ----------
+    data_for_email: list
+        List of objects to create dataframe out of
+    
+    Returns
+    -------
+    None
+    """
+    
+    html_tb = pd.DataFrame(data_for_email).to_html(justify='center',index=False)
+    msg = EmailMessage()
+    msg['Subject'] = 'Results From JWST Reference File Testing.'
+    msg['From'] = Address('', 'mfix', 'stsci.edu')
+    msg['To'] = Address('', 'mfix', 'stsci.edu')
+    body_str = """
+        <html>
+            <head></head>
+            <body>
+                <p><b> Results from run </b></p>
+                {}
+            </body>
+        </html>
+        """.format(html_tb)
+    msg.add_alternative(body_str, subtype='html')
+    with smtplib.SMTP('smtp.stsci.edu') as s:
+        s.send_message(msg)
+
+def main():
+    """Main to parse command line arguments.
+
+    Parameters
+    ----------
+    None
+
+    Returns
+    -------
+    None
+    """
+    
+    # Get docopt arguments..
+    args = docopt(__doc__, version='0.1')
+
+    success = []
+    ref_file = args['<ref_file>']
+    data_file = args['--data']
+    
+    if data_file is not None:
+        success.append(test_reference_file(ref_file, data_file))
+    else:
+        session = db.load_session(db_path=args['<db_path>'])
+        data_files = find_matches(ref_file, session, max_matches=int(args['--max_matches']))
+        
+        if data_files:
+            delayed_data_files = [delayed(test_reference_file)(ref_file, fname) 
+                                  for fname in data_files]
+            if args['--num_cpu']:
+                tab_data = compute(delayed_data_files, num_workers=int(args['--num_cpu']))[0]
+                send_email(tab_data)
+            else:
+                for f in data_files:
+                    success.append(test_reference_file(ref_file, f))
+            
+            print('Tests successful for {}/{} files'.format(np.sum(success), len(data_files)))
+            
+            if np.sum(success) == len(data_files):
+                return True
+            else:
+                print('The following failed:')
+                for f, result in zip(data_files, success):
+                    if not result:
+                        print('\t'+f)
+                return False
