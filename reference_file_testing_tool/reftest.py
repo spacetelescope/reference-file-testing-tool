@@ -11,8 +11,8 @@ Options:
   -h --help                  Show this screen.
   --version                  Show version.
   --data=<fname>             data to run pipeline with
-  --max_matches=<match>      maximum number of data sets to test [default: 10]
-  --num_cpu=<n>              number of cores to use [default: 5]
+  --max_matches=<match>      maximum number of data sets to test
+  --num_cpu=<n>              number of cores to use [default: 2]
   --email=<addr>             email results from job with html table.
 """
 
@@ -27,6 +27,7 @@ from dask.diagnostics import ProgressBar
 from docopt import docopt
 from email.headerregistry import Address
 from email.message import EmailMessage
+from email.mime.text import MIMEText
 from jwst import datamodels
 from jwst.pipeline import calwebb_dark, calwebb_image2, calwebb_spec2
 
@@ -38,6 +39,7 @@ except ImportError:
 import logging
 import numpy as np
 import pandas as pd
+import psutil
 import smtplib
 from sqlalchemy import or_
 
@@ -83,6 +85,7 @@ IMAGING = ['fgs_image', 'fgs_focus', 'fgs_skyflat', 'fgs_intflat', 'mir_image',
            'nrs_tacq', 'nrs_taslit', 'nrs_taconfirm', 'nrs_confirm', 'nrs_image',
            'nrs_focus', 'nrs_mimf', 'nrs_bota']
 
+
 def get_pipelines(exp_type):
     """Sorts which pipeline to use based on exp_type
 
@@ -118,6 +121,7 @@ def override_reference_file(ref_file, pipeline):
             print('Setting {} in {} step'.format('override_{}'.format(dm.meta.reftype), step))
 
     return pipeline
+
 
 def test_reference_file(ref_file, data_file):
     """Override CRDS reference file with the supplied reference file and run
@@ -160,7 +164,7 @@ def test_reference_file(ref_file, data_file):
 
     except Exception as err:
         result_meta['Test_Status'] = 'FAILED'
-        result_meta['Error_Msg'] = str(err)
+        result_meta['Error_Msg'] = str(err) * 3
         
         return result_meta
 
@@ -173,6 +177,8 @@ def find_matches(ref_file, session, max_matches=-1):
     ----------
     ref_file: str
         File path to reference file to test
+    session: sqlite session object
+        A sqlite database session.
     max_matches: int
         Maximum matches to return. (Default=-1, return all matches)
 
@@ -241,7 +247,8 @@ def find_matches(ref_file, session, max_matches=-1):
         print('\tNo matches found')
 
     return filenames[:max_matches]
-    
+
+
 def send_email(data_for_email, addr):
     """Send nicely formatted pandas dataframe as html table via email when
     reference file test job is done.
@@ -259,12 +266,13 @@ def send_email(data_for_email, addr):
     
     # Make sure to strip the username from the domain if full email given.
     if '@' in addr:
-        addr = line.split("@")[0]
-    else:
-        addr = addr
+        addr = addr.split("@")[0]
     
+    # Make sure to print full error message...
     pd.set_option('display.max_colwidth', -1)
-    html_tb = pd.DataFrame(data_for_email).to_html(justify='center',index=False)
+    
+    # Make df into html table and then put into email.
+    html_tb = df.to_html(justify='center',index=False)
     msg = EmailMessage()
     msg['Subject'] = 'Results From JWST Reference File Testing.'
     msg['From'] = Address('', addr, 'stsci.edu')
@@ -279,8 +287,10 @@ def send_email(data_for_email, addr):
         </html>
         """.format(html_tb)
     msg.add_alternative(body_str, subtype='html')
+     
     with smtplib.SMTP('smtp.stsci.edu') as s:
         s.send_message(msg)
+
 
 def main():
     """Main to parse command line arguments.
@@ -304,7 +314,9 @@ def main():
     # else, search DB for files that will be effected by new ref file
     if data_file is not None:
         file_to_cal = delayed(test_reference_file)(ref_file, data_file)
-        file_to_cal.compute()
+        tab_data = file_to_cal.compute()
+        pd.set_option('display.max_colwidth', -1)
+        print(pd.DataFrame(tab_data))
     else:
         session = db.load_session(db_path=args['<db_path>'])
         data_files = find_matches(ref_file, session, max_matches=int(args['--max_matches']))
@@ -313,15 +325,18 @@ def main():
         if data_files:
             delayed_data_files = [delayed(test_reference_file)(ref_file, fname) 
                                   for fname in data_files]
+            # Check to make sure user isn't exceeding number of CPUs.
+            if int(args['--num_cpu']) > psutil.cpu_count():
+                args = (psutil.cpu_count(), args['--num_cpu'])
+                err_str = "YOUR MACHINE ONLY HAS {} CPUs! YOU ENTERED {}"       
+                raise ValueError(err_str.format(*args))
+            else:
+                # Compute results in parallel.
+                print("Performing Calibration...")
+                with ProgressBar():
+                    tab_data = compute(delayed_data_files, num_workers=int(args['--num_cpu']))[0]
             
-            # Compute results in parallel.
-            print("Performing Calibration...")
-            with ProgressBar():
-                tab_data = compute(delayed_data_files, num_workers=int(args['--num_cpu']))[0]
-            
-            
-            # Put if else block to specify wheter user wants email or not.
-            # If not, print results to screen.
+            # If you want to email, 
             if args['--email']:
                 send_email(tab_data, args['--email'])
             else:

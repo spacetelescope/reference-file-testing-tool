@@ -2,15 +2,16 @@
 
 Usage:
   db_utils (create | remove) <db_path>
-  db_utils (add | replace | force | full_reg_set) <db_path> <file_path>
+  db_utils (add | replace | force | full_reg_set) <db_path> <file_path> [--num_cpu=<n>]
 
 Arguments:
   <db_path>     Absolute path to database. 
   <file_path>   Absolute path to fits file to add. 
 
 Options:
-  -h --help     Show this screen.
-  --version     Show version.
+  -h --help         Show this screen.
+  --version         Show version.
+  --num_cpu=<n>     number of cpus to use [default: 2]
 """
 
 import glob
@@ -21,6 +22,7 @@ from dask import compute, delayed
 from dask.diagnostics import ProgressBar
 from docopt import docopt
 import itertools
+import psutil
 import re
 from sqlalchemy import Column, Integer, String, create_engine
 from sqlalchemy.ext.declarative import declarative_base
@@ -73,7 +75,64 @@ class TestData(Base):
         self.SUBSTRT2 = header.get('SUBSTRT2')
         self.SUBSIZE1 = header.get('SUBSIZE1')
         self.SUBSIZE2 = header.get('SUBSIZE2')
+
+
+def load_session(db_path=None):
+    """
+    Create a new session with the test data DB.
     
+    Parameters
+    ----------
+    db_path: str
+        Path to test data DB.
+
+    Returns
+    -------
+    session: sqlalchemy.orm.Session
+    """
+
+    if db_path is None:
+        print("db_path = None, SUPPLY ABSOLUTE PATH TO DB!")
+    else:
+        engine = create_engine('sqlite:///{}'.format(db_path), echo=False)
+        Session = sessionmaker(bind=engine)
+        session = Session()
+        return session
+
+
+def commit_session(data, db_path):
+    """Load and commit additions to DB
+
+    Parameters
+    ----------
+    data: object
+        Instance of TestData
+    db_path: str
+        Location of database
+    """
+    
+    session = load_session(db_path)
+    session.add(data)
+    session.commit()
+
+
+def create_test_data_db(db_path):
+    """
+    Create the SQLite DB for test data.
+    
+    Parameters
+    ----------
+    db_path: str
+        Absolute path to save the DB
+    """
+
+    if os.path.exists(db_path):
+        print("{} EXISTS ALREADY!".format(db_path))
+    else:
+        engine = create_engine('sqlite:///{}'.format(db_path), echo=False)
+        Base.metadata.create_all(engine)
+
+
 def build_dask_delayed_list(function, data):
     """Build list of dask delayed objects for functions with single arguments.
     May want to expand for more arguments in the future.
@@ -132,6 +191,7 @@ def walk_filesystem(data_dir):
     
     return full_paths
 
+
 def find_all_datasets(top_dir):
     """Crawl through the JWST test regression datasystem
     to locate files.
@@ -162,37 +222,6 @@ def find_all_datasets(top_dir):
 
     return final_paths
 
-def bulk_populate(file_path, db_path):
-    """Populate database with in parallel.
-
-    Parameters
-    ----------
-    file_path: str
-        Data location
-    db_path: str
-        Absolute pat to database
-    
-    Returns
-    -------
-    None
-    """
-    
-    print("GATHERING DATA, THIS CAN TAKE A FEW MINUTES....")
-    final_paths = find_all_datasets(file_path)
-    
-    data = build_dask_delayed_list(TestData, final_paths)
-    
-    print("EXTRACTING KEYWORDS....")
-    with ProgressBar():
-        data_to_insert = compute(data)[0]
-    
-    data_to_ingest = []
-    for dataset in data_to_insert:
-        data_to_ingest.append(delayed(commit_session)(dataset, db_path))
-        
-    print("INSERTING INTO DB....")
-    with ProgressBar():
-        compute(data_to_ingest)
 
 def data_exists(fname, session):
     """
@@ -229,61 +258,6 @@ def data_exists(fname, session):
            
     query_result = session.query(TestData).filter_by(**args)
     return query_result
-
-
-def load_session(db_path=None):
-    """
-    Create a new session with the test data DB.
-    
-    Parameters
-    ----------
-    db_path: str
-        Path to test data DB.
-
-    Returns
-    -------
-    session: sqlalchemy.orm.Session
-    """
-
-    if db_path is None:
-        print("db_path = None, SUPPLY ABSOLUTE PATH TO DB!")
-    else:
-        engine = create_engine('sqlite:///{}'.format(db_path), echo=False)
-        Session = sessionmaker(bind=engine)
-        session = Session()
-        return session
-
-def commit_session(data, db_path):
-    """Load and commit additions to DB
-
-    Parameters
-    ----------
-    data: object
-        Instance of TestData
-    db_path: str
-        Location of database
-    """
-    
-    session = load_session(db_path)
-    session.add(data)
-    session.commit()
-
-
-def create_test_data_db(db_path):
-    """
-    Create the SQLite DB for test data.
-    
-    Parameters
-    ----------
-    db_path: str
-        Absolute path to save the DB
-    """
-
-    if os.path.exists(db_path):
-        print("{} EXISTS ALREADY!".format(db_path))
-    else:
-        engine = create_engine('sqlite:///{}'.format(db_path), echo=False)
-        Base.metadata.create_all(engine)
 
 
 def add_test_data(file_path, db_path=None, force=False, replace=False):
@@ -333,6 +307,41 @@ def add_test_data(file_path, db_path=None, force=False, replace=False):
             print("ADDED {} TO DATABASE".format(file_path))
 
 
+def bulk_populate(file_path, db_path, num_cpu):
+    """Populate database with in parallel.
+
+    Parameters
+    ----------
+    file_path: str
+        Data location
+    db_path: str
+        Absolute pat to database
+    num_cpu: int
+        Number of worker to pass dask.compute
+        
+    Returns
+    -------
+    None
+    """
+    
+    print("GATHERING DATA, THIS CAN TAKE A FEW MINUTES....")
+    final_paths = find_all_datasets(file_path)
+    
+    data = build_dask_delayed_list(TestData, final_paths)
+    
+    print("EXTRACTING KEYWORDS....")
+    with ProgressBar():
+        data_to_insert = compute(data, num_workers=num_cpu)[0]
+    
+    data_to_ingest = []
+    for dataset in data_to_insert:
+        data_to_ingest.append(delayed(commit_session)(dataset, db_path))
+        
+    print("INSERTING INTO DB....")
+    with ProgressBar():
+        compute(data_to_ingest, num_workers=num_cpu)
+
+
 def main():
     """Main to parse command line arguments.
 
@@ -357,7 +366,17 @@ def main():
                       force=args['force'], 
                       replace=args['replace'])
     elif args['full_reg_set']:
-        bulk_populate(args['<file_path>'],
-                      args['<db_path>'])
+        # Check to make sure user isn't exceeding number of CPUs.
+        if int(args['--num_cpu']) > psutil.cpu_count():
+                args = (psutil.cpu_count(), args['--num_cpu'])
+                err_str = "YOUR MACHINE ONLY HAS {} CPUs! YOU ENTERED {}"       
+                raise ValueError(err_str.format(*args))
+        else:
+            bulk_populate(args['<file_path>'],
+                          args['<db_path>'],
+                          int(args['--num_cpu']))
     else:
+        # Need to think of clever way to make sure file is db
+        # before deleting. Dont want them passing things that
+        # aren't sqlite db's...
         print("Needs some work....")
