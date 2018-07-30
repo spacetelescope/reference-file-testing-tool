@@ -37,7 +37,7 @@ Installing the Reference File Testing Tool
 
 The Tool is currently in early development and must be installed from the GitHub development repository.
 
-Building from source
+Building From Source
 --------------------
 
 The latest development version of the Tool can be cloned from GitHub using this command ::
@@ -52,18 +52,20 @@ To install the Tool (from the root of the source tree) ::
 
     python setup.py install
 
-Building and Populating a Database
-----------------------------------
-
-Here is an outline of the process:
+Outline for Basic Usage
+-----------------------
 
 1. Build a database that contains uncalibrated JWST files.
 
 2. Query the database for files affected by reference file you wish to test.
 
-3. Calibrate datasets returned from database with JWST pipeline and reference file
+3. Calibrate datasets returned from database with JWST pipeline and reference file you provide
 
-4. Display results in terminal or email.
+4. Display results of testing to user in terminal or email.
+
+
+Building and Populating the Database
+------------------------------------
 
 How do we create and add data to the database? Use the ``db_utils`` entry point. ::
 
@@ -86,9 +88,11 @@ To create the database, we will use the ``create`` option. ::
 
     $ db_utils create /your/path/your_db_name.db
 
-Now that we have a database, how do we store data in it? We have a couple of options here... ::
+Now that we have a database, how do we store or manipulate data inside of it? We have a couple of options here... ::
 
     $ db_utils add /your/path/your_db_name.db /path/to/file/jwst_uncal.fits 
+
+This will add a single row in the database for ``jwst_uncal.fits`` with the filename as the primary key for the table.
 
 Lets say that there is an updated version of ``jwst_uncal.fits`` that you want to add to the database. 
 If you try to use ``add`` the code will return an error because there is already an entry with the primary key ``jwst_uncal.fits``. 
@@ -98,14 +102,18 @@ To 'update' the row, we will use the ``replace`` option. ::
 
 Now the database contains the entry for the updated version of the file.
 
-When adding files one at a time, you will only be able to add files with a specific JWST observing mode. To override this functionality, use the
+When adding files one at a time, you will only be able to add one file with a specific JWST observing mode. To override this functionality, use the
 ``force`` option. ::
     
-    $ db_utils add /your/path/your_db_name.db /path/to/file/file_with_same_obsmode_as_jwst_uncal.fits 
+    $ db_utils force /your/path/your_db_name.db /path/to/file/file_with_same_obsmode_as_jwst_uncal.fits 
 
 Now you will have two different files with the same observing mode parameters from the headers in the database.
 
-The final option is to add all of the data from a top level directory downward. ``full_reg_set`` uses python's `os.walk <https://docs.python.org/2/library/os.html#os.walk>`
+
+Adding Multiple Files at Once
+-----------------------------
+
+The final option is to add all of the data from a top level directory downward. ``full_reg_set`` uses python's `os.walk <https://docs.python.org/2/library/os.html#os.walk>`_
 function to examine all directories for files within the root directory provided. ::
 
     $ db_utils full_reg_set /your/path/your_db_name.db /path/to/dir/with/dirs_of_data
@@ -115,7 +123,7 @@ hung up. The ``[--num_cpu=<n>]`` by default is set to 2 by default but can be in
 
     $ db_utils full_reg_set /your/path/your_db_name.db /path/to/dir/with/dirs_of_data --num_cpu=8
 
-will find, preprocess and ingest the data using 8 workers at one time. The code performs a check for the number of cpus on your machine before executing
+will find, preprocess and ingest the data using 8 workers. The code performs a check for the number of cpus on your machine before executing
 to make sure you aren't exceeding the number of cores you have available.  
     
 Testing JWST Reference File

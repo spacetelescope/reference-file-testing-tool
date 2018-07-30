@@ -155,7 +155,7 @@ def test_reference_file(ref_file, data_file):
     try:
         for pipeline in get_pipelines(fits.getheader(data_file)['EXP_TYPE']):
             pipeline = override_reference_file(ref_file, pipeline)
-            result = pipeline.run(result)
+            pipeline.run(data_file)
         
         result_meta['Test_Status'] = 'PASSED'
         result_meta['Error_Msg'] = None
@@ -164,7 +164,7 @@ def test_reference_file(ref_file, data_file):
 
     except Exception as err:
         result_meta['Test_Status'] = 'FAILED'
-        result_meta['Error_Msg'] = str(err) * 3
+        result_meta['Error_Msg'] = err
         
         return result_meta
 
@@ -270,6 +270,9 @@ def send_email(data_for_email, addr):
     
     # Make sure to print full error message...
     pd.set_option('display.max_colwidth', -1)
+    
+    # Make dataframe
+    df = pd.DataFrame(data_for_email)
     
     # Make df into html table and then put into email.
     html_tb = df.to_html(justify='center',index=False)
