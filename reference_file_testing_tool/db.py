@@ -1,7 +1,7 @@
 """Database utility scripts.
 
 Usage:
-  db_utils (create | remove) <db_path>
+  db_utils create <db_path>
   db_utils (add | replace | force | full_reg_set) <db_path> <file_path> [--num_cpu=<n>]
 
 Arguments:
@@ -375,8 +375,3 @@ def main():
             bulk_populate(args['<file_path>'],
                           args['<db_path>'],
                           int(args['--num_cpu']))
-    else:
-        # Need to think of clever way to make sure file is db
-        # before deleting. Dont want them passing things that
-        # aren't sqlite db's...
-        print("Needs some work....")
