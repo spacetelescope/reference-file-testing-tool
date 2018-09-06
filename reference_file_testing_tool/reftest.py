@@ -219,7 +219,7 @@ def find_matches(ref_file, session, max_matches=-1):
 
                 or_vals = dm[p_attr.lower()].split('|')[:-1]
                 or_vals = [val.strip() for val in or_vals]
-                query_args.append(or_(getattr(db.TestData, meta_to_fits[attr]) == val for val in or_vals))
+                query_args.append(or_(getattr(db.RegressionData, meta_to_fits[attr]) == val for val in or_vals))
                 keys_used.append([meta_to_fits[attr], dm[p_attr.lower()]])
 
         # Ignore special CRDS-only values
@@ -228,13 +228,13 @@ def find_matches(ref_file, session, max_matches=-1):
 
         # Normal values
         else:
-            query_args.append(getattr(db.TestData, meta_to_fits[attr]) == dm[attr.lower()])
+            query_args.append(getattr(db.RegressionData, meta_to_fits[attr]) == dm[attr.lower()])
             keys_used.append([meta_to_fits[attr], dm[attr.lower()]])
 
     query_string = '\n'.join(['\t{} = {}'.format(key[0], key[1]) for key in keys_used])
     print('Searching DB for test data with\n'+query_string)
     
-    query_result = session.query(db.TestData).filter(*query_args)
+    query_result = session.query(db.RegressionData).filter(*query_args)
     filenames = [os.path.join(result.path, result.filename) for result in query_result]
     
     print('Found {} instances:'.format(len(filenames)), end="")
@@ -322,8 +322,10 @@ def main():
         print(pd.DataFrame(tab_data))
     else:
         session = db.load_session(db_path=args['<db_path>'])
-        data_files = find_matches(ref_file, session, max_matches=int(args['--max_matches']))
-        
+        if args['--max_matches']:
+            data_files = find_matches(ref_file, session, max_matches=int(args['--max_matches']))
+        else:
+            data_files = find_matches(ref_file, session)
         # If files are returned, build list of objects to process
         if data_files:
             delayed_data_files = [delayed(test_reference_file)(ref_file, fname) 

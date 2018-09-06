@@ -76,6 +76,51 @@ class TestData(Base):
         self.SUBSIZE1 = header.get('SUBSIZE1')
         self.SUBSIZE2 = header.get('SUBSIZE2')
 
+class RegressionData(Base):
+    __tablename__ = 'regression_data'
+
+    filename = Column(String(100), primary_key=True)
+    path = Column(String(200))
+    DATE_OBS = Column(String(10))
+    TIME_OBS = Column(String(12))
+    INSTRUME = Column(String(20))
+    READPATT = Column(String(20))
+    EXP_TYPE = Column(String(20))
+    DETECTOR = Column(String(20))
+    BAND = Column(String(20))
+    CHANNEL = Column(String(20))
+    FILTER = Column(String(20))
+    PUPIL = Column(String(20))
+    GRATING = Column(String(20))
+    SUBARRAY = Column(String(20))
+    SUBSTRT1 = Column(String(20))
+    SUBSTRT2 = Column(String(20))
+    SUBSIZE1 = Column(String(20))
+    SUBSIZE2 = Column(String(20))
+
+
+    def __init__(self, filename):
+        header = fits.getheader(filename)
+        path, name = os.path.split(filename)
+        
+        self.filename = name
+        self.path = path
+        self.DATE_OBS = header.get('DATE-OBS')
+        self.TIME_OBS = header.get('TIME-OBS')
+        self.INSTRUME = header.get('INSTRUME')
+        self.DETECTOR = header.get('DETECTOR')
+        self.CHANNEL = header.get('CHANNEL')
+        self.FILTER = header.get('FILTER')
+        self.PUPIL = header.get('PUPIL')
+        self.BAND = header.get('BAND')
+        self.GRATING = header.get('GRATING')
+        self.EXP_TYPE = header.get('EXP_TYPE')
+        self.READPATT = header.get('READPATT')
+        self.SUBARRAY = header.get('SUBARRAY')
+        self.SUBSTRT1 = header.get('SUBSTRT1')
+        self.SUBSTRT2 = header.get('SUBSTRT2')
+        self.SUBSIZE1 = header.get('SUBSIZE1')
+        self.SUBSIZE2 = header.get('SUBSIZE2')
 
 def load_session(db_path=None):
     """
@@ -173,22 +218,28 @@ def walk_filesystem(data_dir):
         List absolute paths to files in side of data_dir
     """
     # We only want uncalibrabrated products.
-    filetypes = ['uncal.fits',
-                 'rate.fits',
-                 'rateints.fits',
-                 'trapsfilled.fits',
-                 'dark.fits']
+    # filetypes = ['uncal.fits',
+    #              'rate.fits',
+    #              'rateints.fits',
+    #              'trapsfilled.fits',
+    #              'dark.fits']
 
     for root, dirs, files in os.walk(data_dir):
-        # Join path + filename for files if extension is in filetypes.
         full_paths = [os.path.join(root, filename) 
                       for filename in files 
-                      if any(
-                             filetype in filename 
-                             for filetype in filetypes
-                             )
+                      if filename.endswith('uncal.fits')
                      ]
-    
+        
+        # Just incase we want to include other products to the tool
+        # Join path + filename for files if extension is in filetypes.
+        # full_paths = [os.path.join(root, filename) 
+        #               for filename in files 
+        #               if any(
+        #                      filetype in filename 
+        #                      for filetype in filetypes
+        #                      )
+        #              ]
+
     return full_paths
 
 
@@ -220,7 +271,7 @@ def find_all_datasets(top_dir):
     with ProgressBar():
         final_paths = list(itertools.chain(*compute(results)[0]))
 
-    return final_paths
+    return top_levels, final_paths
 
 
 def data_exists(fname, session):
@@ -256,7 +307,7 @@ def data_exists(fname, session):
     args['SUBSIZE1'] = header.get('SUBSIZE1')
     args['SUBSIZE2'] = header.get('SUBSIZE2')
            
-    query_result = session.query(TestData).filter_by(**args)
+    query_result = session.query(RegressionData).filter_by(**args)
     return query_result
 
 
@@ -284,31 +335,34 @@ def add_test_data(file_path, db_path=None, force=False, replace=False):
     session = load_session(db_path)
 
     # For files in the path provided
-    for fname in glob.glob(file_path):
+    for fname in glob.glob(file_path + '/*'):
         # Check if file exists in database
-        query_result = data_exists(fname, session)
-        if query_result.count() != 0 and not (force or replace):
-            # If file exists and you don't want to force add or replace
-            # let the user know this file is in the database and how
-            # to add by force.
-            print("There is already test data with the same parameters. \
-                   To add the data anyway use \
-                   db_utils force <db_path> <file_path>")
-        elif query_result and replace:
-            session.delete(query_result.first())
-            session.add(TestData(fname))
-            session.commit()
-            print("REPLACED {} WITH {}".format(query_result.first().filename,
-                                               file_path))
+        if not fname.endswith('_uncal.fits'):
+            continue
         else:
-            new_test_data = TestData(fname)
-            session.add(new_test_data)
-            session.commit()
-            print("ADDED {} TO DATABASE".format(file_path))
+            query_result = data_exists(fname, session)
+            if query_result.count() != 0 and not (force or replace):
+                # If file exists and you don't want to force add or replace
+                # let the user know this file is in the database and how
+                # to add by force.
+                print("There is already test data with the same parameters. \
+                    To add the data anyway use \
+                    db_utils force <db_path> <file_path>")
+            elif query_result and replace:
+                session.delete(query_result.first())
+                session.add(RegressionData(fname))
+                session.commit()
+                print("REPLACED {} WITH {}".format(query_result.first().filename,
+                                                file_path))
+            else:
+                new_test_data = RegressionData(fname)
+                session.add(new_test_data)
+                session.commit()
+                print("ADDED {} TO DATABASE".format(file_path))
 
 
 def bulk_populate(file_path, db_path, num_cpu):
-    """Populate database with in parallel.
+    """Populate database in parallel.
 
     Parameters
     ----------
@@ -325,22 +379,29 @@ def bulk_populate(file_path, db_path, num_cpu):
     """
     
     print("GATHERING DATA, THIS CAN TAKE A FEW MINUTES....")
-    final_paths = find_all_datasets(file_path)
+    all_file_dirs, full_file_paths = find_all_datasets(file_path)
     
-    data = build_dask_delayed_list(TestData, final_paths)
+    data = build_dask_delayed_list(TestData, full_file_paths)
     
     print("EXTRACTING KEYWORDS....")
     with ProgressBar():
         data_to_insert = compute(data, num_workers=num_cpu)[0]
-    
+        
+    print("INSERTING INTO DB....")
     data_to_ingest = []
     for dataset in data_to_insert:
         data_to_ingest.append(delayed(commit_session)(dataset, db_path))
-        
-    print("INSERTING INTO DB....")
+    
     with ProgressBar():
         compute(data_to_ingest, num_workers=num_cpu)
-
+    
+    print("MAKING REGRESSION DB....")
+    reg_data = []
+    for directory in all_file_dirs:
+        reg_data.append(delayed(add_test_data)(directory, db_path))
+    
+    with ProgressBar():
+        compute(reg_data, num_workers=num_cpu)
 
 def main():
     """Main to parse command line arguments.
