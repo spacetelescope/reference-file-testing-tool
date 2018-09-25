@@ -24,103 +24,11 @@ from docopt import docopt
 import itertools
 import psutil
 import re
-from sqlalchemy import Column, Integer, String, create_engine
-from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-Base = declarative_base()
-
-class TestData(Base):
-    __tablename__ = 'test_data'
-
-    filename = Column(String(100), primary_key=True)
-    path = Column(String(200))
-    DATE_OBS = Column(String(10))
-    TIME_OBS = Column(String(12))
-    INSTRUME = Column(String(20))
-    READPATT = Column(String(20))
-    EXP_TYPE = Column(String(20))
-    DETECTOR = Column(String(20))
-    BAND = Column(String(20))
-    CHANNEL = Column(String(20))
-    FILTER = Column(String(20))
-    PUPIL = Column(String(20))
-    GRATING = Column(String(20))
-    SUBARRAY = Column(String(20))
-    SUBSTRT1 = Column(String(20))
-    SUBSTRT2 = Column(String(20))
-    SUBSIZE1 = Column(String(20))
-    SUBSIZE2 = Column(String(20))
-
-
-    def __init__(self, filename):
-        header = fits.getheader(filename)
-        path, name = os.path.split(filename)
-        
-        self.filename = name
-        self.path = path
-        self.DATE_OBS = header.get('DATE-OBS')
-        self.TIME_OBS = header.get('TIME-OBS')
-        self.INSTRUME = header.get('INSTRUME')
-        self.DETECTOR = header.get('DETECTOR')
-        self.CHANNEL = header.get('CHANNEL')
-        self.FILTER = header.get('FILTER')
-        self.PUPIL = header.get('PUPIL')
-        self.BAND = header.get('BAND')
-        self.GRATING = header.get('GRATING')
-        self.EXP_TYPE = header.get('EXP_TYPE')
-        self.READPATT = header.get('READPATT')
-        self.SUBARRAY = header.get('SUBARRAY')
-        self.SUBSTRT1 = header.get('SUBSTRT1')
-        self.SUBSTRT2 = header.get('SUBSTRT2')
-        self.SUBSIZE1 = header.get('SUBSIZE1')
-        self.SUBSIZE2 = header.get('SUBSIZE2')
-
-class RegressionData(Base):
-    __tablename__ = 'regression_data'
-
-    filename = Column(String(100), primary_key=True)
-    path = Column(String(200))
-    DATE_OBS = Column(String(10))
-    TIME_OBS = Column(String(12))
-    INSTRUME = Column(String(20))
-    READPATT = Column(String(20))
-    EXP_TYPE = Column(String(20))
-    DETECTOR = Column(String(20))
-    BAND = Column(String(20))
-    CHANNEL = Column(String(20))
-    FILTER = Column(String(20))
-    PUPIL = Column(String(20))
-    GRATING = Column(String(20))
-    SUBARRAY = Column(String(20))
-    SUBSTRT1 = Column(String(20))
-    SUBSTRT2 = Column(String(20))
-    SUBSIZE1 = Column(String(20))
-    SUBSIZE2 = Column(String(20))
-
-
-    def __init__(self, filename):
-        header = fits.getheader(filename)
-        path, name = os.path.split(filename)
-        
-        self.filename = name
-        self.path = path
-        self.DATE_OBS = header.get('DATE-OBS')
-        self.TIME_OBS = header.get('TIME-OBS')
-        self.INSTRUME = header.get('INSTRUME')
-        self.DETECTOR = header.get('DETECTOR')
-        self.CHANNEL = header.get('CHANNEL')
-        self.FILTER = header.get('FILTER')
-        self.PUPIL = header.get('PUPIL')
-        self.BAND = header.get('BAND')
-        self.GRATING = header.get('GRATING')
-        self.EXP_TYPE = header.get('EXP_TYPE')
-        self.READPATT = header.get('READPATT')
-        self.SUBARRAY = header.get('SUBARRAY')
-        self.SUBSTRT1 = header.get('SUBSTRT1')
-        self.SUBSTRT2 = header.get('SUBSTRT2')
-        self.SUBSIZE1 = header.get('SUBSIZE1')
-        self.SUBSIZE2 = header.get('SUBSIZE2')
+from .models import Base
+from .models import Files, COS, STIS, WFC3, ACS
 
 def load_session(db_path=None):
     """
@@ -177,6 +85,57 @@ def create_test_data_db(db_path):
         engine = create_engine('sqlite:///{}'.format(db_path), echo=False)
         Base.metadata.create_all(engine)
 
+def select_instrument_table(instrument):
+    """Select and return SQL table object.
+
+    Parameters
+    ----------
+    instrument: str
+        instrument name 
+    """
+    instrument_list = {'COS':COS,
+                       'STIS':STIS,
+                       'WFC3':WFC3,
+                       'ACS':ACS}
+
+    return instrument_list[instrument]
+
+def populate_instrument_table(instrument, db_path, num_cpu):
+    """Populate the individual instrument tables for tool.
+
+    Parameters
+    ----------
+    instrument: str
+        instrument name
+    db_path: str
+        path to db
+    num_cpu: int
+        number of cpus to use in parallel
+    """
+    session = load_session(db_path)
+
+    files = [os.path.join(result.path, result.filename)
+                    for result in session.query(Files).\
+                                    filter(Files.instrume == instrument)
+            ]
+    
+    session.close()
+    
+    instrument_table = select_instrument_table(instrument)
+
+    data_to_ingest = build_dask_delayed_list(instrument_table, files)
+
+    print('EXTRACTING {} KEYWORDS'.format(instrument))
+    with ProgressBar():
+        data = compute(data_to_ingest, num_workers=num_cpu)[0]
+
+    data_to_add = []
+    for dataset in data:
+        data_to_add.append(delayed(commit_session)(dataset, db_path))
+    
+    print('ADDING DATA TO {} DB'.format(instrument))
+    with ProgressBar():
+        compute(data_to_add, num_workers=num_cpu)
 
 def build_dask_delayed_list(function, data):
     """Build list of dask delayed objects for functions with single arguments.
@@ -218,27 +177,21 @@ def walk_filesystem(data_dir):
         List absolute paths to files in side of data_dir
     """
     # We only want uncalibrabrated products.
-    # filetypes = ['uncal.fits',
-    #              'rate.fits',
-    #              'rateints.fits',
-    #              'trapsfilled.fits',
-    #              'dark.fits']
+    filetypes = ['uncal.fits',
+                 'rawtag.fits',
+                 'rawtag_a.fits',
+                 'rawtag_b.fits',
+                 'raw.fits']
 
     for root, dirs, files in os.walk(data_dir):
+        # Join path + filename for files if extension is in filetypes.
         full_paths = [os.path.join(root, filename) 
                       for filename in files 
-                      if filename.endswith('uncal.fits')
+                      if any(
+                             filetype in filename 
+                             for filetype in filetypes
+                             )
                      ]
-        
-        # Just incase we want to include other products to the tool
-        # Join path + filename for files if extension is in filetypes.
-        # full_paths = [os.path.join(root, filename) 
-        #               for filename in files 
-        #               if any(
-        #                      filetype in filename 
-        #                      for filetype in filetypes
-        #                      )
-        #              ]
 
     return full_paths
 
@@ -260,56 +213,20 @@ def find_all_datasets(top_dir):
     
     top_levels = []
     
+    expression = '[a-z]{2}\d{5}|cos|stis|adrizzle|acs'
+    
     for item in os.listdir(top_dir):
         full_path = os.path.join(top_dir, item)
-        pattern = re.compile('[a-z]{2}\d{5}')
+        pattern = re.compile((expression))
         if pattern.match(item) is not None:
             top_levels.append(full_path)
     
     results = build_dask_delayed_list(walk_filesystem, top_levels)
-    
+
     with ProgressBar():
         final_paths = list(itertools.chain(*compute(results)[0]))
 
     return top_levels, final_paths
-
-
-def data_exists(fname, session):
-    """
-    Check if there is already a dataset with the proposed dataset's parameters
-    
-    Parameters
-    ----------
-    fname: str
-        proposed new file
-    session: sqlalchemy.Session
-        DB Session
-
-    Returns
-    -------
-        True if there are no matches
-    """
-
-    header = fits.getheader(fname)
-    args = {}
-    args['INSTRUME'] = header.get('INSTRUME')
-    args['DETECTOR'] = header.get('DETECTOR')
-    args['CHANNEL'] = header.get('CHANNEL')
-    args['FILTER'] = header.get('FILTER')
-    args['PUPIL'] = header.get('PUPIL')
-    args['BAND'] = header.get('BAND')
-    args['GRATING'] = header.get('GRATING')
-    args['EXP_TYPE'] = header.get('EXP_TYPE')
-    args['READPATT'] = header.get('READPATT')
-    args['SUBARRAY'] = header.get('SUBARRAY')
-    args['SUBSTRT1'] = header.get('SUBSTRT1')
-    args['SUBSTRT2'] = header.get('SUBSTRT2')
-    args['SUBSIZE1'] = header.get('SUBSIZE1')
-    args['SUBSIZE2'] = header.get('SUBSIZE2')
-           
-    query_result = session.query(RegressionData).filter_by(**args)
-    return query_result
-
 
 def add_test_data(file_path, db_path=None, force=False, replace=False):
     """
@@ -336,29 +253,33 @@ def add_test_data(file_path, db_path=None, force=False, replace=False):
 
     # For files in the path provided
     for fname in glob.glob(file_path + '/*'):
-        # Check if file exists in database
-        if not fname.endswith('_uncal.fits'):
-            continue
-        else:
-            query_result = data_exists(fname, session)
-            if query_result.count() != 0 and not (force or replace):
-                # If file exists and you don't want to force add or replace
-                # let the user know this file is in the database and how
-                # to add by force.
-                print("There is already test data with the same parameters. \
-                    To add the data anyway use \
-                    db_utils force <db_path> <file_path>")
-            elif query_result and replace:
-                session.delete(query_result.first())
-                session.add(RegressionData(fname))
-                session.commit()
-                print("REPLACED {} WITH {}".format(query_result.first().filename,
-                                                file_path))
-            else:
-                new_test_data = RegressionData(fname)
-                session.add(new_test_data)
-                session.commit()
-                print("ADDED {} TO DATABASE".format(file_path))
+        with fits.open(fname) as hdu:
+            instrument = hdu[0].header['instrume']
+        ins_table = select_instrument_table(instrument)
+        new_test_data = ins_table(fname)
+        session.add(new_test_data)
+        session.commit()
+        print("ADDED {} TO {} TABLE".format(file_path, instrument))
+        
+        # query_result = data_exists(fname, session)
+        # if query_result.count() != 0 and not (force or replace):
+        #     # If file exists and you don't want to force add or replace
+        #     # let the user know this file is in the database and how
+        #     # to add by force.
+        #     print("There is already test data with the same parameters. \
+        #         To add the data anyway use \
+        #         db_utils force <db_path> <file_path>")
+        # elif query_result and replace:
+        #     session.delete(query_result.first())
+        #     session.add(ins_table(fname))
+        #     session.commit()
+        #     print("REPLACED {} WITH {}".format(query_result.first().filename,
+        #                                     file_path))
+        # else:
+        #     new_test_data = ins_table(fname)
+        #     session.add(new_test_data)
+        #     session.commit()
+        #     print("ADDED {} TO {}".format(file_path, ins_table))
 
 
 def bulk_populate(file_path, db_path, num_cpu):
@@ -381,27 +302,32 @@ def bulk_populate(file_path, db_path, num_cpu):
     print("GATHERING DATA, THIS CAN TAKE A FEW MINUTES....")
     all_file_dirs, full_file_paths = find_all_datasets(file_path)
     
-    data = build_dask_delayed_list(TestData, full_file_paths)
+    data = build_dask_delayed_list(Files, full_file_paths)
     
     print("EXTRACTING KEYWORDS....")
     with ProgressBar():
         data_to_insert = compute(data, num_workers=num_cpu)[0]
-        
+    
     print("INSERTING INTO DB....")
     data_to_ingest = []
     for dataset in data_to_insert:
         data_to_ingest.append(delayed(commit_session)(dataset, db_path))
-    
+
     with ProgressBar():
         compute(data_to_ingest, num_workers=num_cpu)
     
-    print("MAKING REGRESSION DB....")
-    reg_data = []
-    for directory in all_file_dirs:
-        reg_data.append(delayed(add_test_data)(directory, db_path))
+    hst_instruments = ['COS', 'STIS', 'WFC3', 'ACS']
+
+    for instrume in hst_instruments:
+        populate_instrument_table(instrume, db_path, num_cpu)
+
+    # print("MAKING REGRESSION DB....")
+    # reg_data = []
+    # for directory in all_file_dirs:
+    #     reg_data.append(delayed(add_test_data)(directory, db_path))
     
-    with ProgressBar():
-        compute(reg_data, num_workers=num_cpu)
+    # with ProgressBar():
+    #     compute(reg_data, num_workers=num_cpu)
 
 def main():
     """Main to parse command line arguments.
