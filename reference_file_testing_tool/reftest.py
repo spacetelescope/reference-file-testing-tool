@@ -18,16 +18,17 @@ Options:
 
 from __future__ import print_function
 
-import os
-
 from astropy.io import fits
 import crds
+from crds.core import utils
 from dask import compute, delayed
 from dask.diagnostics import ProgressBar
+from datetime import datetime
 from docopt import docopt
 from email.headerregistry import Address
 from email.message import EmailMessage
 from email.mime.text import MIMEText
+import glob
 from jwst import datamodels
 from jwst.pipeline import calwebb_dark, calwebb_image2, calwebb_spec2
 
@@ -38,8 +39,10 @@ except ImportError:
 
 import logging
 import numpy as np
+import os
 import pandas as pd
 import psutil
+from shutil import copy
 import smtplib
 from sqlalchemy import or_
 
@@ -50,6 +53,7 @@ except ImportError:
     from io import StringIO
 
 from . import db
+from .models import Files, COS, STIS, WFC3, ACS
 
 p_mapping = {
     "META.EXPOSURE.TYPE": "META.EXPOSURE.P_EXPTYPE",
@@ -295,6 +299,66 @@ def send_email(data_for_email, addr):
         s.send_message(msg)
 
 
+def find_hst_matches(ref_file, session):
+    """Match and return HST files to calibrate.
+    """
+
+    header = fits.getheader(ref_file)
+
+    instrume = header.get('INSTRUME')
+    detector = header.get('DETECTOR')
+
+    files_to_calibrate = [os.path.join(result.path, result.filename)
+                            for result in session.query(Files).\
+                                filter(Files.instrume == instrume).\
+                                filter(Files.detector == detector)]
+    
+    return files_to_calibrate
+
+
+def copy_files(files, ref_file, num_cpu):
+    """copy files to calibrate to users local dir.
+    """
+    
+    home = os.getenv('HOME')
+    instrume, filetype = utils.get_file_properties('hst', ref_file)
+    timestamp = datetime.now().strftime('%Y-%m-%dT%H-%M-%S')
+    
+    new_cal_dir = 'RFTT_{}_{}_{}'.format(instrume, filetype ,timestamp)
+    new_cal_dir = os.path.join(home, new_cal_dir)
+    os.mkdir(os.path.join(home, new_cal_dir))
+
+    print("MOVING FILES TO CALIBRATE TO THIS LOCATION {}".format(new_cal_dir))
+
+    files_to_copy = [delayed(copy)(f, new_cal_dir) for f in files[:10]]
+    
+    with ProgressBar():
+        compute(files_to_copy, num_workers=num_cpu)
+    
+    files_to_update = [delayed(assign_ref_file)(f, ref_file, filetype) for f in glob.glob(new_cal_dir + '/*.fits')]
+
+    print('ASSIGNING REFERENCE FILE TO HEADERS')
+    with ProgressBar():
+        compute(files_to_update, num_workers=num_cpu)
+
+
+def assign_ref_file(filename, ref_file, filetype):
+    """Assign reference file to headers for calibration
+    """
+    with fits.open(filename, mode='update') as hdu:
+        if hdu[0].header[filetype]:
+            hdu[0].header[filetype] = ref_file
+        elif hdu[1].header[filetype]:
+            hdu[1].header[filetype] = ref_file
+        else:
+            print("REFERENCE FILE ISNT IN EXT 1 OR 2")
+
+def calibrate_files(pipeline, file_loc, outdir):
+    """Calibrate files with appropriate pipeline
+    """
+
+    pipeline(file_loc)
+
 def main():
     """Main to parse command line arguments.
 
@@ -312,38 +376,44 @@ def main():
 
     ref_file = args['<ref_file>']
     data_file = args['--data']
+    num_cpu = int(args['--num_cpu'])
     
+    session = db.load_session(db_path=args['<db_path>'])
+
+    files = find_hst_matches(ref_file, session)
+    copy_files(files, ref_file, num_cpu)
+
     # if you only want to test one JWST file against ref file
     # else, search DB for files that will be effected by new ref file
-    if data_file is not None:
-        file_to_cal = delayed(test_reference_file)(ref_file, data_file)
-        tab_data = file_to_cal.compute()
-        pd.set_option('display.max_colwidth', -1)
-        print(pd.DataFrame(tab_data))
-    else:
-        session = db.load_session(db_path=args['<db_path>'])
-        if args['--max_matches']:
-            data_files = find_matches(ref_file, session, max_matches=int(args['--max_matches']))
-        else:
-            data_files = find_matches(ref_file, session)
-        # If files are returned, build list of objects to process
-        if data_files:
-            delayed_data_files = [delayed(test_reference_file)(ref_file, fname) 
-                                  for fname in data_files]
-            # Check to make sure user isn't exceeding number of CPUs.
-            if int(args['--num_cpu']) > psutil.cpu_count():
-                args = (psutil.cpu_count(), args['--num_cpu'])
-                err_str = "YOUR MACHINE ONLY HAS {} CPUs! YOU ENTERED {}"       
-                raise ValueError(err_str.format(*args))
-            else:
-                # Compute results in parallel.
-                print("Performing Calibration...")
-                with ProgressBar():
-                    tab_data = compute(delayed_data_files, num_workers=int(args['--num_cpu']))[0]
+    # if data_file is not None:
+    #     file_to_cal = delayed(test_reference_file)(ref_file, data_file)
+    #     tab_data = file_to_cal.compute()
+    #     pd.set_option('display.max_colwidth', -1)
+    #     print(pd.DataFrame(tab_data))
+    # else:
+    #     session = db.load_session(db_path=args['<db_path>'])
+    #     if args['--max_matches']:
+    #         data_files = find_matches(ref_file, session, max_matches=int(args['--max_matches']))
+    #     else:
+    #         data_files = find_matches(ref_file, session)
+    #     # If files are returned, build list of objects to process
+    #     if data_files:
+    #         delayed_data_files = [delayed(test_reference_file)(ref_file, fname) 
+    #                               for fname in data_files]
+    #         # Check to make sure user isn't exceeding number of CPUs.
+    #         if int(args['--num_cpu']) > psutil.cpu_count():
+    #             args = (psutil.cpu_count(), args['--num_cpu'])
+    #             err_str = "YOUR MACHINE ONLY HAS {} CPUs! YOU ENTERED {}"       
+    #             raise ValueError(err_str.format(*args))
+    #         else:
+    #             # Compute results in parallel.
+    #             print("Performing Calibration...")
+    #             with ProgressBar():
+    #                 tab_data = compute(delayed_data_files, num_workers=int(args['--num_cpu']))[0]
             
-            # If you want to email, 
-            if args['--email']:
-                send_email(tab_data, args['--email'])
-            else:
-                pd.set_option('display.max_colwidth', -1)
-                print(pd.DataFrame(tab_data))
+    #         # If you want to email, 
+    #         if args['--email']:
+    #             send_email(tab_data, args['--email'])
+    #         else:
+    #             pd.set_option('display.max_colwidth', -1)
+    #             print(pd.DataFrame(tab_data))

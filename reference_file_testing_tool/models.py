@@ -2,6 +2,8 @@
 """
 
 from astropy.io import fits
+from collections import ChainMap
+import numpy as np
 import os
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.ext.declarative import declarative_base
@@ -20,16 +22,31 @@ class Files(Base):
     detector = Column(String(10))
     
     def __init__(self, filename):
-        header = fits.getheader(filename)
         path, name = os.path.split(filename)
-
-        self.filename = name
-        self.path = path
-        self.date_obs = header.get('DATE-OBS')
-        self.time_obs = header.get('TIME-OBS')
-        self.telescop = header.get('TELESCOP')
-        self.instrume = header.get('INSTRUME')
-        self.detector = header.get('DETECTOR')
+        with fits.open(filename) as hdu:
+            self.filename = name
+            self.path = path
+            self.instrume = hdu[0].header.get('INSTRUME')
+            
+            # Time and date keywords have different names or can appear
+            # in different extensions.
+            if self.instrume == 'STIS':
+                date_key = 'TDATEOBS'
+                time_key = 'TTIMEOBS'
+                ext=0
+            elif self.instrume == 'COS':
+                date_key = 'DATE-OBS'
+                time_key = 'TIME-OBS'
+                ext=1
+            else:
+                date_key = 'DATE-OBS'
+                time_key = 'TIME-OBS'
+                ext=0
+            
+            self.date_obs = hdu[ext].header.get(date_key)
+            self.time_obs = hdu[ext].header.get(time_key)
+            self.telescop = hdu[0].header.get('TELESCOP')
+            self.detector = hdu[0].header.get('DETECTOR')
 
 class COS(Base):
     __tablename__ = 'hst_cos'
@@ -42,15 +59,14 @@ class COS(Base):
     opt_elem = Column(String(10))
     
     def __init__(self, filename):
-        header = fits.getheader(filename)
         name = os.path.split(filename)[1]
-
         self.filename = name
-        self.cenwave = header.get('CENWAVE')
-        self.exptype = header.get('EXPTYPE')
-        self.life_adj = header.get('LIFE_ADJ')
-        self.obsmode = header.get('OBSMODE')
-        self.opt_elem = header.get('OPT_ELEM')
+        with fits.open(filename) as hdu:
+            self.cenwave = hdu[0].header.get('CENWAVE')
+            self.exptype = hdu[0].header.get('EXPTYPE')
+            self.life_adj = hdu[0].header.get('LIFE_ADJ')
+            self.obsmode = hdu[0].header.get('OBSMODE')
+            self.opt_elem = hdu[0].header.get('OPT_ELEM')
 
 class STIS(Base):
     __tablename__ = 'hst_stis'
@@ -67,19 +83,18 @@ class STIS(Base):
     opt_elem = Column(String(10))
     
     def __init__(self, filename):
-        header = fits.getheader(filename)
         name = os.path.split(filename)[1]
-
         self.filename = name
-        self.aperture = header.get('APERTURE')
-        self.binaxis1 = header.get('BINAXIS1')
-        self.binaxis2 = header.get('BINAXIS2')
-        self.ccdamp = header.get('CCDAMP')
-        self.ccdgain = header.get('CCDGAIN')
-        self.ccdoffst = header.get('CCDOFFST')
-        self.cenwave = header.get('CENWAVE')
-        self.obstype = header.get('OBSTYPE')
-        self.opt_elem = header.get('OPT_ELEM')
+        with fits.open(filename) as hdu:
+            self.aperture = hdu[0].header.get('APERTURE')
+            self.binaxis1 = hdu[0].header.get('BINAXIS1')
+            self.binaxis2 = hdu[0].header.get('BINAXIS2')
+            self.ccdamp = hdu[0].header.get('CCDAMP')
+            self.ccdgain = hdu[0].header.get('CCDGAIN')
+            self.ccdoffst = hdu[0].header.get('CCDOFFST')
+            self.cenwave = hdu[0].header.get('CENWAVE')
+            self.obstype = hdu[0].header.get('OBSTYPE')
+            self.opt_elem = hdu[0].header.get('OPT_ELEM')
 
 class WFC3(Base):
     __tablename__ = 'hst_wfc3'
@@ -99,22 +114,21 @@ class WFC3(Base):
     subtype = Column(String(20)) 
     
     def __init__(self, filename):
-        header = fits.getheader(filename)
         name = os.path.split(filename)[1]
-
         self.filename = name
-        self.aperture =  header.get('APERTURE')   
-        self.binaxis1 = header.get('BINAXIS1')
-        self.binaxis2 = header.get('BINAXIS2')
-        self.ccdamp = header.get('CCDAMP')
-        self.ccdgain = header.get('CCDGAIN')
-        self.chinject = header.get('CHINJECT')
-        self.filter = header.get('FILTER')
-        self.flashcur = header.get('FLASHCUR')
-        self.sample_seq = header.get('SAMPLE_SEQ') 
-        self.shutrpos = header.get('SHUTRPOS')
-        self.subarray = header.get('SUBARRAY')
-        self.subtype =  header.get('SUBTYPE')
+        with fits.open(filename) as hdu:
+            self.aperture =  hdu[0].header.get('APERTURE')   
+            self.binaxis1 = hdu[1].header.get('BINAXIS1')
+            self.binaxis2 = hdu[1].header.get('BINAXIS2')
+            self.ccdamp = hdu[0].header.get('CCDAMP')
+            self.ccdgain = hdu[0].header.get('CCDGAIN')
+            self.chinject = hdu[0].header.get('CHINJECT') # NOT CONSITENT ACROSS MODES
+            self.filter = hdu[0].header.get('FILTER')
+            self.flashcur = hdu[0].header.get('FLASHCUR') # NOT CONSITENT ACROSS MODES
+            self.sample_seq = hdu[0].header.get('SAMPLE_SEQ') # NOT CONSITENT ACROSS MODES
+            self.shutrpos = hdu[0].header.get('SHUTRPOS') # NOT CONSITENT ACROSS MODES
+            self.subarray = hdu[0].header.get('SUBARRAY')
+            self.subtype =  hdu[0].header.get('SUBTYPE')
 
 class ACS(Base):
     __tablename__ = 'hst_acs'
@@ -139,27 +153,27 @@ class ACS(Base):
     ycorner = Column(String(20))
     
     def __init__(self, filename):
-        header = fits.getheader(filename)
+        
         name = os.path.split(filename)[1]
-
         self.filename = name
-        self.aperture = header.get('APERTURE')
-        self.ccdamp = header.get('CCDAMP')
-        self.ccdgain = header.get('CCDGAIN')
-        self.filter1 = header.get('FILTER1')
-        self.filter2 = header.get('FILTER2')
-        self.obstype = header.get('OBSTYPE')
-        self.flashcurr =header.get('FLASHCURR')
-        self.shutrpos = header.get('SHUTRPOS')
-        self.fw1offst = header.get('FW1OFFST')
-        self.fw2offst = header.get('FW2OFFST')
-        self.fwsoffst = header.get('FWSOFFST')
-        self.ltv1 = header.get('LTV1')
-        self.ltv2 = header.get('LTV2')
-        self.naxis1 = header.get('NAXIS1')
-        self.naxis2 = header.get('NAXIS2')
-        self.xcorner = header.get('XCORNER')
-        self.ycorner = header.get('YCORNER')
+        with fits.open(filename) as hdu:
+            self.aperture = hdu[0].header.get('APERTURE')
+            self.ccdamp = hdu[0].header.get('CCDAMP')
+            self.ccdgain = hdu[0].header.get('CCDGAIN')
+            self.filter1 = hdu[0].header.get('FILTER1')
+            self.filter2 = hdu[0].header.get('FILTER2')
+            self.obstype = hdu[0].header.get('OBSTYPE')
+            self.flashcurr = hdu[0].header.get('FLASHCURR') # NOT CONSITENT ACROSS MODES
+            self.shutrpos = hdu[0].header.get('SHUTRPOS')
+            self.fw1offst = hdu[0].header.get('FW1OFFST')
+            self.fw2offst = hdu[0].header.get('FW2OFFST')
+            self.fwsoffst = hdu[0].header.get('FWSOFFST')
+            self.ltv1 = hdu[1].header.get('LTV1')
+            self.ltv2 = hdu[1].header.get('LTV2')
+            self.naxis1 = hdu[1].header.get('NAXIS1')
+            self.naxis2 = hdu[1].header.get('NAXIS2')
+            self.xcorner = hdu[0].header.get('XCORNER') # NOT CONSITENT ACROSS MODES
+            self.ycorner = hdu[0].header.get('YCORNER') # NOT CONSITENT ACROSS MODES
         
 
 # class TestData(Base):
