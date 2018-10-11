@@ -58,8 +58,8 @@ try:
 except ImportError:
     from io import StringIO
 
-from . import db
-from .models import Files, COS, STIS, WFC3, ACS
+from .db import load_session
+from .models import Files, JWST
 
 p_mapping = {
     "META.EXPOSURE.TYPE": "META.EXPOSURE.P_EXPTYPE",
@@ -229,7 +229,7 @@ def find_matches(ref_file, session, max_matches=-1):
 
                 or_vals = dm[p_attr.lower()].split('|')[:-1]
                 or_vals = [val.strip() for val in or_vals]
-                query_args.append(or_(getattr(db.RegressionData, meta_to_fits[attr]) == val for val in or_vals))
+                query_args.append(or_(getattr(JWST, meta_to_fits[attr]) == val for val in or_vals))
                 keys_used.append([meta_to_fits[attr], dm[p_attr.lower()]])
 
         # Ignore special CRDS-only values
@@ -238,13 +238,13 @@ def find_matches(ref_file, session, max_matches=-1):
 
         # Normal values
         else:
-            query_args.append(getattr(db.RegressionData, meta_to_fits[attr]) == dm[attr.lower()])
+            query_args.append(getattr(JWST, meta_to_fits[attr]) == dm[attr.lower()])
             keys_used.append([meta_to_fits[attr], dm[attr.lower()]])
 
     query_string = '\n'.join(['\t{} = {}'.format(key[0], key[1]) for key in keys_used])
     print('Searching DB for test data with\n'+query_string)
     
-    query_result = session.query(db.RegressionData).filter(*query_args)
+    query_result = session.query(JWST).filter(*query_args)
     filenames = [os.path.join(result.path, result.filename) for result in query_result]
     
     print('Found {} instances:'.format(len(filenames)), end="")
@@ -324,8 +324,8 @@ def main():
     
     session = db.load_session(db_path=args['<db_path>'])
 
-    if you only want to test one JWST file against ref file
-    else, search DB for files that will be effected by new ref file
+    # if you only want to test one JWST file against ref file
+    # else, search DB for files that will be effected by new ref file
     if data_file is not None:
         file_to_cal = delayed(test_reference_file)(ref_file, data_file)
         tab_data = file_to_cal.compute()

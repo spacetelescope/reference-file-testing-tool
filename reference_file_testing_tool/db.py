@@ -28,7 +28,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
 from .models import Base
-from .models import Files, COS, STIS, WFC3, ACS
+from .models import Files, COS, STIS, WFC3, ACS, JWST
 
 def load_session(db_path=None):
     """
@@ -37,7 +37,7 @@ def load_session(db_path=None):
     Parameters
     ----------
     db_path: str
-        Path to test data DB.
+        Path to regression DB
 
     Returns
     -------
@@ -59,9 +59,9 @@ def commit_session(data, db_path):
     Parameters
     ----------
     data: object
-        Instance of TestData
+        Class instance of DB table to add
     db_path: str
-        Location of database
+        Path to regression DB
     """
     
     session = load_session(db_path)
@@ -76,7 +76,7 @@ def create_test_data_db(db_path):
     Parameters
     ----------
     db_path: str
-        Absolute path to save the DB
+        Path to regression DB
     """
 
     if os.path.exists(db_path):
@@ -84,6 +84,7 @@ def create_test_data_db(db_path):
     else:
         engine = create_engine('sqlite:///{}'.format(db_path), echo=False)
         Base.metadata.create_all(engine)
+
 
 def select_instrument_table(instrument):
     """Select and return SQL table object.
@@ -100,6 +101,7 @@ def select_instrument_table(instrument):
 
     return instrument_list[instrument]
 
+
 def populate_instrument_table(instrument, db_path, num_cpu):
     """Populate the individual instrument tables for tool.
 
@@ -108,34 +110,79 @@ def populate_instrument_table(instrument, db_path, num_cpu):
     instrument: str
         instrument name
     db_path: str
-        path to db
+        Path to regression DB
     num_cpu: int
         number of cpus to use in parallel
     """
     session = load_session(db_path)
+    
+    instrument_table = select_instrument_table(instrument)
 
     files = [os.path.join(result.path, result.filename)
                     for result in session.query(Files).\
-                                    filter(Files.instrume == instrument)
+                                    filter(Files.instrume == instrument).\
+                                    filter(Files.filename.\
+                                        notin_(session.query(instrument_table.filename)))
             ]
     
     session.close()
     
-    instrument_table = select_instrument_table(instrument)
+    if len(files):
+        
+        data_to_ingest = build_dask_delayed_list(instrument_table, files)
 
-    data_to_ingest = build_dask_delayed_list(instrument_table, files)
+        print('EXTRACTING {} KEYWORDS'.format(instrument))
+        with ProgressBar():
+            data = compute(data_to_ingest, num_workers=num_cpu)[0]
 
-    print('EXTRACTING {} KEYWORDS'.format(instrument))
-    with ProgressBar():
-        data = compute(data_to_ingest, num_workers=num_cpu)[0]
-
-    data_to_add = []
-    for dataset in data:
-        data_to_add.append(delayed(commit_session)(dataset, db_path))
+        data_to_add = []
+        for dataset in data:
+            data_to_add.append(delayed(commit_session)(dataset, db_path))
+        
+        print('ADDING DATA TO {} DB'.format(instrument))
+        with ProgressBar():
+            compute(data_to_add, num_workers=num_cpu)
+    else:
+        print('NO NEW ADDITIONS TO {} TABLE'.format(instrument))
     
-    print('ADDING DATA TO {} DB'.format(instrument))
-    with ProgressBar():
-        compute(data_to_add, num_workers=num_cpu)
+
+def populate_jwst(db_path, num_cpu):
+    """Populate JWST table in regression DB.
+
+    Parameters
+    ----------
+    db_path: str
+        Path to regression DB
+    num_cpu: int
+        Number of worker to pass dask.compute
+    """
+    
+    session = load_session(db_path)
+
+    files = [os.path.join(result.path, result.filename)
+                    for result in session.query(Files).\
+                                    filter(Files.telescop == 'JWST').\
+                                    filter(Files.filename.\
+                                        notin_(session.query(JWST.filename)))
+            ]
+
+    if len(files):
+        data_to_ingest = build_dask_delayed_list(JWST, files)
+
+        print('EXTRACTING JWST KEYWORDS')
+        with ProgressBar():
+            data = compute(data_to_ingest, num_workers=num_cpu)[0]
+
+        data_to_add = []
+        for dataset in data:
+            data_to_add.append(delayed(commit_session)(dataset, db_path))
+        
+        print('ADDING DATA TO JWST DB')
+        with ProgressBar():
+            compute(data_to_add, num_workers=num_cpu)
+    else:
+        print('NO NEW ADDITIONS TO JWST TABLE')
+
 
 def build_dask_delayed_list(function, data):
     """Build list of dask delayed objects for functions with single arguments.
@@ -235,9 +282,9 @@ def add_test_data(file_path, db_path=None, force=False, replace=False):
     Parameters
     ----------
     file_path: str
-        Absolute path for data file to add or data location
+        Path for data file to add or data location
     db_path: str
-        Absolute path to database on local machince
+        Path to regression DB
     force: bool
         Force add to db even if file shares same field entries
     replace: bool
@@ -282,6 +329,35 @@ def add_test_data(file_path, db_path=None, force=False, replace=False):
         #     print("ADDED {} TO {}".format(file_path, ins_table))
 
 
+def files_exist(db_path, table):
+    """Return full files paths currently in DB.
+
+    Parameters
+    ----------
+    db_path: str
+        Path to regression DB
+    table: sqlalchemy table object
+        Database table to query
+    """
+
+    session = load_session(db_path)
+
+    if table.__tablename__ == 'files':
+        files = [os.path.join(result.path, result.filename)
+                        for result in session.query(Files)
+                ]
+    else:
+        files = [os.path.join(result.path, result.filename)
+                        for result in session.query(Files)\
+                        .filter(Files.filename.notin_(session.query(table.filename)))\
+                        .filter(Files.instrume=='ACS')
+                ]
+    
+    session.close()
+
+    return files
+
+
 def bulk_populate(file_path, db_path, num_cpu):
     """Populate database in parallel.
 
@@ -290,7 +366,7 @@ def bulk_populate(file_path, db_path, num_cpu):
     file_path: str
         Data location
     db_path: str
-        Absolute pat to database
+        Path to regression DB
     num_cpu: int
         Number of worker to pass dask.compute
         
@@ -301,33 +377,35 @@ def bulk_populate(file_path, db_path, num_cpu):
     
     print("GATHERING DATA, THIS CAN TAKE A FEW MINUTES....")
     all_file_dirs, full_file_paths = find_all_datasets(file_path)
+    current_files = files_exist(db_path, Files)
     
-    data = build_dask_delayed_list(Files, full_file_paths)
-    
-    print("EXTRACTING KEYWORDS....")
-    with ProgressBar():
-        data_to_insert = compute(data, num_workers=num_cpu)[0]
-    
-    print("INSERTING INTO DB....")
-    data_to_ingest = []
-    for dataset in data_to_insert:
-        data_to_ingest.append(delayed(commit_session)(dataset, db_path))
+    new_files = list(set(full_file_paths) - set(current_files))
 
-    with ProgressBar():
-        compute(data_to_ingest, num_workers=num_cpu)
-    
-    hst_instruments = ['COS', 'STIS', 'WFC3', 'ACS']
+    if new_files:
+        data = build_dask_delayed_list(Files, new_files)
 
-    for instrume in hst_instruments:
+        print("EXTRACTING KEYWORDS....")
+        with ProgressBar():
+            data_to_insert = compute(data, num_workers=num_cpu)[0]
+        
+        data_to_ingest = []
+        print("INSERTING INTO DB....")
+        for dataset in data_to_insert:
+            data_to_ingest.append(delayed(commit_session)(dataset, db_path))
+
+        with ProgressBar():
+            compute(data_to_ingest, num_workers=num_cpu)
+    
+    else:
+        print('NO NEW FILES IN {}'.format(file_path))
+
+    tables = ['COS', 'STIS', 'WFC3', 'ACS']
+    
+    for instrume in tables:
         populate_instrument_table(instrume, db_path, num_cpu)
 
-    # print("MAKING REGRESSION DB....")
-    # reg_data = []
-    # for directory in all_file_dirs:
-    #     reg_data.append(delayed(add_test_data)(directory, db_path))
-    
-    # with ProgressBar():
-    #     compute(reg_data, num_workers=num_cpu)
+    populate_jwst(db_path, num_cpu)
+
 
 def main():
     """Main to parse command line arguments.

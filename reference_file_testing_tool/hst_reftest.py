@@ -18,6 +18,7 @@ Options:
 
 from __future__ import print_function
 
+# Maybe make a more robust test in the future.
 try:
     import calcos
 except ImportError as e:
