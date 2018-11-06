@@ -176,94 +176,42 @@ class ACS(Base):
             self.ycorner = hdu[0].header.get('YCORNER') # NOT CONSITENT ACROSS MODES
         
 
-# class TestData(Base):
-#     __tablename__ = 'test_data'
+class JWST(Base):
+    __tablename__ = 'jwst'
 
-#     filename = Column(String(100), primary_key=True)
-#     path = Column(String(200))
-#     DATE_OBS = Column(String(10))
-#     TIME_OBS = Column(String(12))
-#     INSTRUME = Column(String(20))
-#     READPATT = Column(String(20))
-#     EXP_TYPE = Column(String(20))
-#     DETECTOR = Column(String(20))
-#     BAND = Column(String(20))
-#     CHANNEL = Column(String(20))
-#     FILTER = Column(String(20))
-#     PUPIL = Column(String(20))
-#     GRATING = Column(String(20))
-#     SUBARRAY = Column(String(20))
-#     SUBSTRT1 = Column(String(20))
-#     SUBSTRT2 = Column(String(20))
-#     SUBSIZE1 = Column(String(20))
-#     SUBSIZE2 = Column(String(20))
+    filename = Column(String(100), ForeignKey(Files.filename), primary_key=True)
+    READPATT = Column(String(20))
+    EXP_TYPE = Column(String(20))
+    BAND = Column(String(20))
+    CHANNEL = Column(String(20))
+    FILTER = Column(String(20))
+    PUPIL = Column(String(20))
+    GRATING = Column(String(20))
+    SUBARRAY = Column(String(20))
+    SUBSTRT1 = Column(String(20))
+    SUBSTRT2 = Column(String(20))
+    SUBSIZE1 = Column(String(20))
+    SUBSIZE2 = Column(String(20))
 
 
-#     def __init__(self, filename):
-#         header = fits.getheader(filename)
-#         path, name = os.path.split(filename)
+    def __init__(self, filename):
+        header = fits.getheader(filename)
         
-#         self.filename = name
-#         self.path = path
-#         self.DATE_OBS = header.get('DATE-OBS')
-#         self.TIME_OBS = header.get('TIME-OBS')
-#         self.INSTRUME = header.get('INSTRUME')
-#         self.DETECTOR = header.get('DETECTOR')
-#         self.CHANNEL = header.get('CHANNEL')
-#         self.FILTER = header.get('FILTER')
-#         self.PUPIL = header.get('PUPIL')
-#         self.BAND = header.get('BAND')
-#         self.GRATING = header.get('GRATING')
-#         self.EXP_TYPE = header.get('EXP_TYPE')
-#         self.READPATT = header.get('READPATT')
-#         self.SUBARRAY = header.get('SUBARRAY')
-#         self.SUBSTRT1 = header.get('SUBSTRT1')
-#         self.SUBSTRT2 = header.get('SUBSTRT2')
-#         self.SUBSIZE1 = header.get('SUBSIZE1')
-#         self.SUBSIZE2 = header.get('SUBSIZE2')
-
-# class RegressionData(Base):
-#     __tablename__ = 'regression_data'
-
-#     filename = Column(String(100), primary_key=True)
-#     path = Column(String(200))
-#     DATE_OBS = Column(String(10))
-#     TIME_OBS = Column(String(12))
-#     INSTRUME = Column(String(20))
-#     READPATT = Column(String(20))
-#     EXP_TYPE = Column(String(20))
-#     DETECTOR = Column(String(20))
-#     BAND = Column(String(20))
-#     CHANNEL = Column(String(20))
-#     FILTER = Column(String(20))
-#     PUPIL = Column(String(20))
-#     GRATING = Column(String(20))
-#     SUBARRAY = Column(String(20))
-#     SUBSTRT1 = Column(String(20))
-#     SUBSTRT2 = Column(String(20))
-#     SUBSIZE1 = Column(String(20))
-#     SUBSIZE2 = Column(String(20))
-
-
-#     def __init__(self, filename):
-#         header = fits.getheader(filename)
-#         path, name = os.path.split(filename)
-        
-#         self.filename = name
-#         self.path = path
-#         self.DATE_OBS = header.get('DATE-OBS')
-#         self.TIME_OBS = header.get('TIME-OBS')
-#         self.INSTRUME = header.get('INSTRUME')
-#         self.DETECTOR = header.get('DETECTOR')
-#         self.CHANNEL = header.get('CHANNEL')
-#         self.FILTER = header.get('FILTER')
-#         self.PUPIL = header.get('PUPIL')
-#         self.BAND = header.get('BAND')
-#         self.GRATING = header.get('GRATING')
-#         self.EXP_TYPE = header.get('EXP_TYPE')
-#         self.READPATT = header.get('READPATT')
-#         self.SUBARRAY = header.get('SUBARRAY')
-#         self.SUBSTRT1 = header.get('SUBSTRT1')
-#         self.SUBSTRT2 = header.get('SUBSTRT2')
-#         self.SUBSIZE1 = header.get('SUBSIZE1')
-#         self.SUBSIZE2 = header.get('SUBSIZE2')
+        name = os.path.split(filename)[1]
+        self.filename = name
+        self.DATE_OBS = header.get('DATE-OBS')
+        self.TIME_OBS = header.get('TIME-OBS')
+        self.INSTRUME = header.get('INSTRUME')
+        self.DETECTOR = header.get('DETECTOR')
+        self.CHANNEL = header.get('CHANNEL')
+        self.FILTER = header.get('FILTER')
+        self.PUPIL = header.get('PUPIL')
+        self.BAND = header.get('BAND')
+        self.GRATING = header.get('GRATING')
+        self.EXP_TYPE = header.get('EXP_TYPE')
+        self.READPATT = header.get('READPATT')
+        self.SUBARRAY = header.get('SUBARRAY')
+        self.SUBSTRT1 = header.get('SUBSTRT1')
+        self.SUBSTRT2 = header.get('SUBSTRT2')
+        self.SUBSIZE1 = header.get('SUBSIZE1')
+        self.SUBSIZE2 = header.get('SUBSIZE2')
