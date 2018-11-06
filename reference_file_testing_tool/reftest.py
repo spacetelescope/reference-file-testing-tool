@@ -372,7 +372,7 @@ def main():
     """
     
     # Get docopt arguments..
-    args = docopt(__doc__, version='0.1')
+    args = docopt(__doc__, version='0.1') 
 
     ref_file = args['<ref_file>']
     data_file = args['--data']
