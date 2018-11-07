@@ -217,28 +217,13 @@ def walk_filesystem(data_dir):
     full_path: list
         List absolute paths to files in side of data_dir
     """
-    # We only want uncalibrabrated products.
-    # filetypes = ['uncal.fits',
-    #              'rate.fits',
-    #              'rateints.fits',
-    #              'trapsfilled.fits',
-    #              'dark.fits']
+    
 
     for root, dirs, files in os.walk(data_dir):
         full_paths = [os.path.join(root, filename) 
                       for filename in files 
                       if filename.endswith('uncal.fits')
                      ]
-        
-        # Just incase we want to include other products to the tool
-        # Join path + filename for files if extension is in filetypes.
-        # full_paths = [os.path.join(root, filename) 
-        #               for filename in files 
-        #               if any(
-        #                      filetype in filename 
-        #                      for filetype in filetypes
-        #                      )
-        #              ]
 
     return full_paths
 
@@ -259,19 +244,25 @@ def find_all_datasets(top_dir):
     """
     
     top_levels = []
-    
+    files = []
+
     for item in os.listdir(top_dir):
         full_path = os.path.join(top_dir, item)
         pattern = re.compile('[a-z]{2}\d{5}')
-        if pattern.match(item) is not None:
+        if pattern.match(item) is not None and os.path.isdir(full_path):
             top_levels.append(full_path)
-    
-    results = build_dask_delayed_list(walk_filesystem, top_levels)
-    
-    with ProgressBar():
-        final_paths = list(itertools.chain(*compute(results)[0]))
+        elif pattern.match(item) and os.path.isfile(full_path):
+            files.append(full_path)
 
-    return top_levels, final_paths
+    if top_levels:
+        results = build_dask_delayed_list(walk_filesystem, top_levels)
+        
+        with ProgressBar():
+            final_paths = list(itertools.chain(*compute(results)[0]))
+
+        return top_levels, final_paths
+    elif files:
+        return top_levels, files
 
 
 def data_exists(fname, session):
@@ -334,8 +325,15 @@ def add_test_data(file_path, db_path=None, force=False, replace=False):
     # Create DB session
     session = load_session(db_path)
 
+    # Handling depending on user input being path to direct file
+    # or just file location.
+    if os.path.isfile(file_path):
+        files = [file_path]
+    elif os.path.isdir(file_path):
+        files = glob.glob(file_path + '/*')
+    
     # For files in the path provided
-    for fname in glob.glob(file_path + '/*'):
+    for fname in files:
         # Check if file exists in database
         if not fname.endswith('_uncal.fits'):
             continue
