@@ -18,11 +18,15 @@ Options:
 
 from __future__ import print_function
 
-# Maybe make a more robust test in the future.
+# Make sure you can import calibration pipelines.
 try:
-    import calcos
+    from acstools import calacs
+    from calcos import calcos
+    from stistools.calstis import calstis
+    from wfc3tools import calwf3
+
 except ImportError as e:
-    print('MAKE SURE YOU ARE USING THE ASTROCONDA HST ENVIRONMENT!')
+    print('MAKE SURE YOU ARE USING THE HST ASTROCONDA ENVIRONMENT!')
     print(e)
 
 from astropy.io import fits
@@ -45,6 +49,7 @@ from shutil import copy
 import smtplib
 from sqlalchemy import or_
 
+from .db import Files
 
 def test_reference_file(ref_file, data_file):
     """Override CRDS reference file with the supplied reference file and run
@@ -190,13 +195,14 @@ def assign_ref_file(filename, ref_file, filetype):
         elif hdu[1].header[filetype]:
             hdu[1].header[filetype] = ref_file
         else:
-            print("REFERENCE FILE ISNT IN EXT 1 OR 2")
+            print("REFERENCE FILE ISNT IN EXT 0 OR 1")
 
 
 def calibrate_files(pipeline, file_loc, outdir):
     """Calibrate files with appropriate pipeline
     """
 
+    pipeline = get
     pipeline(file_loc)
 
 

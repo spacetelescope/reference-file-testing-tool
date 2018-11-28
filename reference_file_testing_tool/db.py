@@ -298,8 +298,13 @@ def add_test_data(file_path, db_path=None, force=False, replace=False):
     # Create DB session
     session = load_session(db_path)
 
+    if os.path.isfile(file_path):
+        files = [file_path]
+    elif os.path.isdir(file_path):
+        files = glob.glob(file_path + '/*')
+    
     # For files in the path provided
-    for fname in glob.glob(file_path + '/*'):
+    for fname in files:
         with fits.open(fname) as hdu:
             instrument = hdu[0].header['instrume']
         ins_table = select_instrument_table(instrument)
