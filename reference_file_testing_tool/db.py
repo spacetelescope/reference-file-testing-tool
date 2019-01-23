@@ -393,13 +393,9 @@ def bulk_populate(file_path, db_path, num_cpu):
     with ProgressBar():
         compute(data_to_ingest, num_workers=num_cpu)
     
-    print("MAKING REGRESSION DB....")
-    reg_data = []
     for directory in all_file_dirs:
-        reg_data.append(delayed(add_test_data)(directory, db_path))
+        add_test_data(directory, db_path)
     
-    with ProgressBar():
-        compute(reg_data, num_workers=num_cpu)
 
 def main():
     """Main to parse command line arguments.
