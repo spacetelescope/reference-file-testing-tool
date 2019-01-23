@@ -226,10 +226,15 @@ def walk_filesystem(data_dir):
     # We only want uncalibrabrated products.
     filetypes = ['uncal.fits',
                  'rawtag.fits',
+                 'rawaccum.fits',
                  'rawtag_a.fits',
                  'rawtag_b.fits',
-                 'raw.fits']
-
+                 'raw.fits'
+                 'spt.fits',
+                 'flt_a.fits',
+                 'flt_b.fits',
+                 'lampflash.fits']
+    filetypes = ['raw.fits']
     for root, dirs, files in os.walk(data_dir):
         # Join path + filename for files if extension is in filetypes.
         full_paths = [os.path.join(root, filename) 
@@ -239,7 +244,7 @@ def walk_filesystem(data_dir):
                              for filetype in filetypes
                              )
                      ]
-
+        print(full_paths, data_dir)
     return full_paths
 
 
@@ -269,7 +274,7 @@ def find_all_datasets(top_dir):
             top_levels.append(full_path)
     
     results = build_dask_delayed_list(walk_filesystem, top_levels)
-
+    
     with ProgressBar():
         final_paths = list(itertools.chain(*compute(results)[0]))
 
