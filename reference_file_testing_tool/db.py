@@ -224,17 +224,17 @@ def walk_filesystem(data_dir):
         List absolute paths to files in side of data_dir
     """
     # We only want uncalibrabrated products.
-    filetypes = ['uncal.fits',
+    filetypes = ['raw.fits', 
+                 'rawtag_a.fits', 
+                 'rawtag_b.fits', 
                  'rawtag.fits',
-                 'rawaccum.fits',
-                 'rawtag_a.fits',
-                 'rawtag_b.fits',
-                 'raw.fits'
                  'spt.fits',
                  'flt_a.fits',
                  'flt_b.fits',
+                 'counts_a.fits',
+                 'counts_b.fits',
                  'lampflash.fits']
-    filetypes = ['raw.fits']
+    
     for root, dirs, files in os.walk(data_dir):
         # Join path + filename for files if extension is in filetypes.
         full_paths = [os.path.join(root, filename) 
@@ -244,7 +244,6 @@ def walk_filesystem(data_dir):
                              for filetype in filetypes
                              )
                      ]
-        print(full_paths, data_dir)
     return full_paths
 
 
@@ -266,7 +265,6 @@ def find_all_datasets(top_dir):
     top_levels = []
     
     expression = '[a-z]{2}\d{5}|cos|stis|adrizzle|acs'
-    
     for item in os.listdir(top_dir):
         full_path = os.path.join(top_dir, item)
         pattern = re.compile((expression))
