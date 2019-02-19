@@ -51,7 +51,7 @@ class TestData(Base):
     SUBSTRT2 = Column(String(20))
     SUBSIZE1 = Column(String(20))
     SUBSIZE2 = Column(String(20))
-
+    CORONMSK = Column(String(20))
 
     def __init__(self, filename):
         header = fits.getheader(filename)
@@ -75,7 +75,8 @@ class TestData(Base):
         self.SUBSTRT2 = header.get('SUBSTRT2')
         self.SUBSIZE1 = header.get('SUBSIZE1')
         self.SUBSIZE2 = header.get('SUBSIZE2')
-
+        self.CORONMSK = header.get('CORONMSK')
+        
 class RegressionData(Base):
     __tablename__ = 'regression_data'
 
