@@ -2,7 +2,7 @@
 
 Usage:
   db_utils create <db_path>
-  db_utils (add | replace | force | full_reg_set) <db_path> <file_path> [--num_cpu=<n>]
+  db_utils (add | replace | force | full_reg_set | full_force) <db_path> <file_path> [--extension=<ext>] [--num_cpu=<n>]
 
 Arguments:
   <db_path>     Absolute path to database. 
@@ -12,6 +12,7 @@ Options:
   -h --help         Show this screen.
   --version         Show version.
   --num_cpu=<n>     number of cpus to use [default: 2]
+  --extension=<ext>  extension [default: fits]
 """
 
 import glob
@@ -75,7 +76,7 @@ class TestData(Base):
         self.SUBSTRT2 = header.get('SUBSTRT2')
         self.SUBSIZE1 = header.get('SUBSIZE1')
         self.SUBSIZE2 = header.get('SUBSIZE2')
-        self.CORONMSK = header.get('CORONMSK')
+        self.CORONMSK = header.get('CORONMSK',default='N/A')
         
 class RegressionData(Base):
     __tablename__ = 'regression_data'
@@ -98,6 +99,7 @@ class RegressionData(Base):
     SUBSTRT2 = Column(String(20))
     SUBSIZE1 = Column(String(20))
     SUBSIZE2 = Column(String(20))
+    CORONMSK = Column(String(20))
 
 
     def __init__(self, filename):
@@ -122,6 +124,7 @@ class RegressionData(Base):
         self.SUBSTRT2 = header.get('SUBSTRT2')
         self.SUBSIZE1 = header.get('SUBSIZE1')
         self.SUBSIZE2 = header.get('SUBSIZE2')
+        self.CORONMSK= header.get('CORONMSK',default='N/A')
 
 def load_session(db_path=None):
     """
@@ -140,7 +143,7 @@ def load_session(db_path=None):
     if db_path is None:
         print("db_path = None, SUPPLY ABSOLUTE PATH TO DB!")
     else:
-        engine = create_engine('sqlite:///{}'.format(db_path), echo=False)
+        engine = create_engine('sqlite:///{}'.format(db_path), echo=False, connect_args={'timeout': 15, 'check_same_thread':False})
         Session = sessionmaker(bind=engine)
         session = Session()
         return session
@@ -161,7 +164,6 @@ def commit_session(data, db_path):
     session.add(data)
     session.commit()
 
-
 def create_test_data_db(db_path):
     """
     Create the SQLite DB for test data.
@@ -175,11 +177,11 @@ def create_test_data_db(db_path):
     if os.path.exists(db_path):
         print("{} EXISTS ALREADY!".format(db_path))
     else:
-        engine = create_engine('sqlite:///{}'.format(db_path), echo=False)
+        engine = create_engine('sqlite:///{}'.format(db_path), echo=False, connect_args={'timeout': 15, 'check_same_thread':False})
         Base.metadata.create_all(engine)
 
 
-def build_dask_delayed_list(function, data):
+def build_dask_delayed_list(function, data, ver):
     """Build list of dask delayed objects for functions with single arguments.
     May want to expand for more arguments in the future.
 
@@ -199,12 +201,16 @@ def build_dask_delayed_list(function, data):
     dask_delayed_list = []
 
     for item in data:
-        dask_delayed_list.append(delayed(function)(item))
+        if ver == 1:
+           dask_delayed_list.append(delayed(function)(item))
+        else:
+           dask_delayed_list.append(delayed(function)(item,ver))
+
 
     return dask_delayed_list
 
 
-def walk_filesystem(data_dir):
+def walk_filesystem(data_dir, extension):
     """Wrapper for os.walk to return files in directorys
     below root.
     
@@ -218,18 +224,16 @@ def walk_filesystem(data_dir):
     full_path: list
         List absolute paths to files in side of data_dir
     """
-    
-
     for root, dirs, files in os.walk(data_dir):
         full_paths = [os.path.join(root, filename) 
                       for filename in files 
-                      if filename.endswith('uncal.fits')
+                      if filename.endswith(extension)
                      ]
 
     return full_paths
 
 
-def find_all_datasets(top_dir):
+def find_all_datasets(top_dir,extension):
     """Crawl through the JWST test regression datasystem
     to locate files.
 
@@ -256,7 +260,7 @@ def find_all_datasets(top_dir):
             files.append(full_path)
 
     if top_levels:
-        results = build_dask_delayed_list(walk_filesystem, top_levels)
+        results = build_dask_delayed_list(walk_filesystem, top_levels, extension)
         
         with ProgressBar():
             final_paths = list(itertools.chain(*compute(results)[0]))
@@ -265,6 +269,29 @@ def find_all_datasets(top_dir):
     elif files:
         return top_levels, files
 
+
+def data_unique(fname, session):
+    """
+    Check if there is already a dataset with the proposed dataset's parameters
+    
+    Parameters
+    ----------
+    fname: str
+        proposed new file
+    session: sqlalchemy.Session
+        DB Session
+
+    Returns
+    -------
+        True if there are no matches
+    """
+
+    s1=fname.rfind('/')
+    args1 = {}
+    args1['filename'] = fname[s1+1:]
+
+    query_result1 = session.query(RegressionData).filter_by(**args1)
+    return query_result1
 
 def data_exists(fname, session):
     """
@@ -298,12 +325,13 @@ def data_exists(fname, session):
     args['SUBSTRT2'] = header.get('SUBSTRT2')
     args['SUBSIZE1'] = header.get('SUBSIZE1')
     args['SUBSIZE2'] = header.get('SUBSIZE2')
-           
+    args['CORONMSK'] = header.get('CORONMSK', default='N/A')
+
     query_result = session.query(RegressionData).filter_by(**args)
-    return query_result
+    return query_result 
 
 
-def add_test_data(file_path, db_path=None, force=False, replace=False):
+def add_test_data(file_path, db_path=None, force=False, replace=False, full_force=False, extension='*.fits'):
     """
     Add files to the test data DB.
     
@@ -322,49 +350,73 @@ def add_test_data(file_path, db_path=None, force=False, replace=False):
     -------
     None
     """
-
+    
     # Create DB session
     session = load_session(db_path)
 
+    print(extension)
     # Handling depending on user input being path to direct file
     # or just file location.
     if os.path.isfile(file_path):
         files = [file_path]
     elif os.path.isdir(file_path):
-        files = glob.glob(file_path + '/*')
-    
-    # For files in the path provided
+        files=walk_filesystem(file_path,extension)
+        #files = glob.glob(file_path + '/*')
+
+    all_file_paths=[]
     for fname in files:
         # Check if file exists in database
-        if not fname.endswith('_uncal.fits'):
-            continue
+        query_result1 = data_unique(fname, session)
+        
+        if query_result1.count() != 0 :
+            print('in add_test_data file already in DB: ',fname)
         else:
-            query_result = data_exists(fname, session)
-            if query_result.count() != 0 and not (force or replace):
-                # If file exists and you don't want to force add or replace
-                # let the user know this file is in the database and how
-                # to add by force.
-                print("There is already test data with the same parameters. \
-                    To add the data anyway use \
-                    db_utils force <db_path> <file_path>")
-            elif query_result and replace:
-                session.delete(query_result.first())
-                session.add(RegressionData(fname))
-                session.commit()
-                print("REPLACED {} WITH {}".format(query_result.first().filename,
-                                                file_path))
-            else:
-                new_test_data = RegressionData(fname)
-                session.add(new_test_data)
-                session.commit()
-                print("ADDED {} TO DATABASE".format(file_path))
+            #print('file NEW: ',fname)
+            all_file_paths.append(fname)
 
 
-def bulk_populate(file_path, db_path, num_cpu):
+    if len(all_file_paths) == 0:
+        print('No data to add')
+    else:
+        print('')
+        print(len(all_file_paths),' files to add')
+ 
+    # For files in the path provided
+    #for fname in all_file_paths:
+    for fname in all_file_paths:
+        # Check if file exists in database
+        query_result1 = data_unique(fname, session)
+        #if query_result1 ==8:
+        if query_result1.count() != 0 :
+           continue
+        else:
+           query_result = data_exists(fname, session)
+           if query_result.count() != 0 and not (force or replace):
+               # If file exists and you don't want to force add or replace
+               # let the user know this file is in the database and how
+               # to add by force.
+               print("There is already test data with the same parameters. To force to add the data use db_utils force {} {} ".format(db_path,fname))
+           elif query_result and replace:
+               session.delete(query_result.first())
+               session.add(RegressionData(fname))
+               session.commit()
+               print("REPLACED {} WITH {}".format(query_result.first().filename,
+                                            file_path))
+           else:
+               new_test_data = RegressionData(fname)
+               session.add(new_test_data)
+               session.commit()
+               print("ADDED {} TO DATABASE".format(fname))
+         
+
+
+def bulk_populate(force, file_path, db_path, num_cpu, extension):
     """Populate database in parallel.
 
     Parameters
     ----------
+    force: bolean
+        True: Force to add all data in dir_path to DB
     file_path: str
         Data location
     db_path: str
@@ -378,24 +430,31 @@ def bulk_populate(file_path, db_path, num_cpu):
     """
     
     print("GATHERING DATA, THIS CAN TAKE A FEW MINUTES....")
-    all_file_dirs, full_file_paths = find_all_datasets(file_path)
-    
-    data = build_dask_delayed_list(TestData, full_file_paths)
-    
-    print("EXTRACTING KEYWORDS....")
+
+    # Looks for all the files with the provided extension in the find_all_datasets function
+    all_file_dirs, full_file_paths = find_all_datasets(file_path,extension)
+
+    session = load_session(db_path)
+
+
+    data = build_dask_delayed_list(RegressionData, full_file_paths,1)
+    #all_file_paths)
+
+    print("EXTRACTING KEYWORDS....") 
     with ProgressBar():
         data_to_insert = compute(data, num_workers=num_cpu)[0]
-        
-    print("INSERTING INTO DB....")
+
+    print("INSERTING INTO DB....")     
     data_to_ingest = []
     for dataset in data_to_insert:
         data_to_ingest.append(delayed(commit_session)(dataset, db_path))
-    
-    with ProgressBar():
-        compute(data_to_ingest, num_workers=num_cpu)
-    
+
+    #with ProgressBar():
+    #    compute(data_to_ingest, num_workers=num_cpu)
+
     for directory in all_file_dirs:
-        add_test_data(directory, db_path)
+        #add_test_data(all_file_paths, db_path, force=force)
+        add_test_data(directory, db_path, force=force, extension=extension)
     
 
 def main():
@@ -421,13 +480,22 @@ def main():
                       db_path=args['<db_path>'], 
                       force=args['force'], 
                       replace=args['replace'])
-    elif args['full_reg_set']:
+    elif args['full_reg_set'] or args['full_force']:
         # Check to make sure user isn't exceeding number of CPUs.
         if int(args['--num_cpu']) > psutil.cpu_count():
                 args = (psutil.cpu_count(), args['--num_cpu'])
                 err_str = "YOUR MACHINE ONLY HAS {} CPUs! YOU ENTERED {}"       
                 raise ValueError(err_str.format(*args))
         else:
-            bulk_populate(args['<file_path>'],
+            if args['full_force']:
+               bulk_populate(True, 
+                          args['<file_path>'],
                           args['<db_path>'],
-                          int(args['--num_cpu']))
+                          int(args['--num_cpu']),
+                          args['--extension'])
+            else: 
+               print(args['--extension'])
+               bulk_populate(False,args['<file_path>'],
+                          args['<db_path>'],
+                          int(args['--num_cpu']),
+                          args['--extension']) 
