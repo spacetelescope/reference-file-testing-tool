@@ -259,10 +259,10 @@ def find_all_datasets(top_dir,extension):
         elif pattern.match(item) and os.path.isfile(full_path):
             files.append(full_path)
         elif item.find(extension) > 0 and os.path.isfile(full_path):
-            top_levels.append(top_dir)
+            #top_levels.append(top_dir)
             files.append(full_path)
 
-    if top_levels:
+    if top_levels and not files:
         results = build_dask_delayed_list(walk_filesystem, top_levels, extension)
         with ProgressBar():
             final_paths = list(itertools.chain(*compute(results)[0]))
@@ -453,9 +453,12 @@ def bulk_populate(force, file_path, db_path, num_cpu, extension):
     #with ProgressBar():
     #    compute(data_to_ingest, num_workers=num_cpu)
 
-    for directory in all_file_dirs:
-        #add_test_data(all_file_paths, db_path, force=force)
-        add_test_data(directory, db_path, force=force, extension=extension)
+    if not all_file_dirs:
+        for file_path in full_file_paths:
+            add_test_data(file_path, db_path, force=force, extension=extension)
+    else:
+        for directory in all_file_dirs:
+            add_test_data(directory, db_path, force=force, extension=extension)
 
 
 def main():
