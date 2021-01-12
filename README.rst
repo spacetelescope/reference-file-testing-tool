@@ -32,8 +32,8 @@ The Reference File Testing Tool has the following dependencies:
 - `Pandas <https://pandas.pydata.org>`_
 
 
-Installing the Reference File Testing Tool
-------------------------------------------
+Installing the Reference File Testing Tool in linux (*might not work in a Mac*)
+-----------------------------------------------------------------------------
 
 The Tool is currently in early development and must be installed from the GitHub development repository.
 
@@ -42,11 +42,8 @@ Building From Source
 
 The latest development version of the Tool can be cloned from GitHub using this command ::
 
-    git clone git://github.com/spacetelescope/reference-file-testing-tool.git
+    git clone git@github.com:spacetelescope/reference-file-testing-tool.git
 
-Check out bleeding edge branch ::
-
-    git checkout refactor
 
 To install the Tool (from the root of the source tree) ::
 
