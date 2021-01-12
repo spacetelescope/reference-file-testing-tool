@@ -32,9 +32,9 @@ The Reference File Testing Tool has the following dependencies:
 - `Pandas <https://pandas.pydata.org>`_
 
 
-Installing the Reference File Testing Tool in linux (*might not work in a Mac*)
+Installing the Reference File Testing Tool in linux 
 -----------------------------------------------------------------------------
-
+(*might not work in a Mac*)
 The Tool is currently in early development and must be installed from the GitHub development repository.
 
 Building From Source
