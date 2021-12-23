@@ -32,8 +32,9 @@ The Reference File Testing Tool has the following dependencies:
 - `Pandas <https://pandas.pydata.org>`_
 
 
-Installing the Reference File Testing Tool
-------------------------------------------
+Installing the Reference File Testing Tool in linux 
+-----------------------------------------------------------------------------
+(**might not work in a Mac**)
 
 The Tool is currently in early development and must be installed from the GitHub development repository.
 
@@ -42,11 +43,8 @@ Building From Source
 
 The latest development version of the Tool can be cloned from GitHub using this command ::
 
-    git clone git://github.com/spacetelescope/reference-file-testing-tool.git
+    git clone git@github.com:spacetelescope/reference-file-testing-tool.git
 
-Check out bleeding edge branch ::
-
-    git checkout refactor
 
 To install the Tool (from the root of the source tree) ::
 
@@ -73,7 +71,7 @@ How do we create and add data to the database? Use the ``db_utils`` entry point.
 
     Usage:
         db_utils (create | remove) <db_path>
-        db_utils (add | replace | force | full_reg_set) <db_path> <file_path> [--num_cpu=<n>]
+        db_utils (add | replace | force | full_reg_set | full_force) <db_path> <file_path> [--extension=<ext>] [--num_cpu=<n>]
 
     Arguments:
         <db_path>     Absolute path to database. 
@@ -83,6 +81,7 @@ How do we create and add data to the database? Use the ``db_utils`` entry point.
          -h --help        Show this screen.
         --version         Show version.
         --num_cpu=<n>     number of cpus to use [default: 2]
+        --extension=<ext>  extension [default: fits]
 
 To create the database, we will use the ``create`` option. ::
 
@@ -109,11 +108,26 @@ When adding files one at a time, you will only be able to add one file with a sp
 
 Now you will have two different files with the same observing mode parameters from the headers in the database.
 
-
 Adding Multiple Files at Once
 -----------------------------
+To add all the data from a top level directory downward. ``full_force`` uses python's `os.walk <https://docs.python.org/2/library/os.html#os.walk>`_
+function to examine all directories for files within the root directory provided. ::
 
-The final option is to add all of the data from a top level directory downward. ``full_reg_set`` uses python's `os.walk <https://docs.python.org/2/library/os.html#os.walk>`_
+    $ db_utils full_force /your/path/your_db_name.db /path/to/dir/with/dirs_of_data
+
+You will then be prompted by some messages printed to the screen along with the a progress bar. From a user perspective, this lets you know the code isn't
+hung up. The ``[--num_cpu=<n>]`` by default is set to 2 by default but can be increased depending on the computing power of your machine. Entering ::
+
+    $ db_utils full_force /your/path/your_db_name.db /path/to/dir/with/dirs_of_data --num_cpu=8
+
+If your directory has different type of calibrated inputs and outputs and you only want to upload an specific type, you can use the option 
+``[--extension=<ext>]``, by default it is set to --extension=fits
+
+
+Adding All Unique Files at Once
+-------------------------------
+
+To add all the unique data from a top level directory downward. ``full_reg_set`` uses python's `os.walk <https://docs.python.org/2/library/os.html#os.walk>`_
 function to examine all directories for files within the root directory provided. ::
 
     $ db_utils full_reg_set /your/path/your_db_name.db /path/to/dir/with/dirs_of_data
@@ -125,6 +139,11 @@ hung up. The ``[--num_cpu=<n>]`` by default is set to 2 by default but can be in
 
 will find, preprocess and ingest the data using 8 workers. The code performs a check for the number of cpus on your machine before executing
 to make sure you aren't exceeding the number of cores you have available.  
+
+Note that this option will only add the first dataset of a given mode will be added to the database.  If the added dataset is not the one you wanted,
+you can use the option ``replace`` to get your favorite dataset in the db
+
+This option only adds the _uncal.fits files to the db
     
 Testing JWST Reference File
 ---------------------------
