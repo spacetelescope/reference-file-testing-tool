@@ -2,7 +2,7 @@
 
 Usage:
   db_utils create <db_path>
-  db_utils (add | replace | force | full_reg_set | full_force) <db_path> <file_path> [--extension=<ext>] [--num_cpu=<n>]
+  db_utils (add | replace | force | full_reg_set | full_force) <db_path> <file_path> [--extension=<ext>] [--num_cpu=<n>] [--gen=<gn>]
 
 Arguments:
   <db_path>     Absolute path to database.
@@ -13,6 +13,7 @@ Options:
   --version         Show version.
   --num_cpu=<n>     number of cpus to use [default: 2]
   --extension=<ext>  extension [default: fits]
+  --gen=<gn>       [default: 0]
 """
 
 import glob
@@ -41,18 +42,23 @@ class TestData(Base):
     INSTRUME = Column(String(20))
     READPATT = Column(String(20))
     EXP_TYPE = Column(String(20))
+    TEMPLATE = Column(String(50))
     DETECTOR = Column(String(20))
     BAND = Column(String(20))
     CHANNEL = Column(String(20))
     FILTER = Column(String(20))
     PUPIL = Column(String(20))
     GRATING = Column(String(20))
+    NINTS = Column(String(20))
+    NGROUPS = Column(String(20))
     SUBARRAY = Column(String(20))
     SUBSTRT1 = Column(String(20))
     SUBSTRT2 = Column(String(20))
     SUBSIZE1 = Column(String(20))
     SUBSIZE2 = Column(String(20))
     CORONMSK = Column(String(20))
+    BKGDTARG = Column(String(3))
+    TSOVISIT = Column(String(3))
 
     def __init__(self, filename):
         header = fits.getheader(filename)
@@ -69,7 +75,10 @@ class TestData(Base):
         self.PUPIL = header.get('PUPIL')
         self.BAND = header.get('BAND')
         self.GRATING = header.get('GRATING')
+        self.NINTS = header.get('NINTS')
+        self.NGROUPS = header.get('NGROUPS')
         self.EXP_TYPE = header.get('EXP_TYPE')
+        self.TEMPLATE = header.get('TEMPLATE')
         self.READPATT = header.get('READPATT')
         self.SUBARRAY = header.get('SUBARRAY')
         self.SUBSTRT1 = header.get('SUBSTRT1')
@@ -77,6 +86,8 @@ class TestData(Base):
         self.SUBSIZE1 = header.get('SUBSIZE1')
         self.SUBSIZE2 = header.get('SUBSIZE2')
         self.CORONMSK = header.get('CORONMSK',default='N/A')
+        self.BKGDTARG = header.get('BKGDTARG')
+        self.TSOVISIT = header.get('TSOVISIT')
 
 class RegressionData(Base):
     __tablename__ = 'regression_data'
@@ -88,18 +99,23 @@ class RegressionData(Base):
     INSTRUME = Column(String(20))
     READPATT = Column(String(20))
     EXP_TYPE = Column(String(20))
+    TEMPLATE = Column(String(50))
     DETECTOR = Column(String(20))
     BAND = Column(String(20))
     CHANNEL = Column(String(20))
     FILTER = Column(String(20))
     PUPIL = Column(String(20))
     GRATING = Column(String(20))
+    NINTS = Column(String(20))
+    NGROUPS = Column(String(20))
     SUBARRAY = Column(String(20))
     SUBSTRT1 = Column(String(20))
     SUBSTRT2 = Column(String(20))
     SUBSIZE1 = Column(String(20))
     SUBSIZE2 = Column(String(20))
     CORONMSK = Column(String(20))
+    BKGDTARG = Column(String(3))
+    TSOVISIT = Column(String(3))
 
 
     def __init__(self, filename):
@@ -117,7 +133,10 @@ class RegressionData(Base):
         self.PUPIL = header.get('PUPIL')
         self.BAND = header.get('BAND')
         self.GRATING = header.get('GRATING')
+        self.NINTS = header.get('NINTS')
+        self.NGROUPS = header.get('NGROUPS')
         self.EXP_TYPE = header.get('EXP_TYPE')
+        self.TEMPLATE = header.get('TEMPLATE')
         self.READPATT = header.get('READPATT')
         self.SUBARRAY = header.get('SUBARRAY')
         self.SUBSTRT1 = header.get('SUBSTRT1')
@@ -125,6 +144,8 @@ class RegressionData(Base):
         self.SUBSIZE1 = header.get('SUBSIZE1')
         self.SUBSIZE2 = header.get('SUBSIZE2')
         self.CORONMSK= header.get('CORONMSK',default='N/A')
+        self.BKGDTARG = header.get('BKGDTARG')
+        self.TSOVISIT = header.get('TSOVISIT')
 
 def load_session(db_path=None):
     """
@@ -232,7 +253,7 @@ def walk_filesystem(data_dir, extension):
     return full_paths
 
 
-def find_all_datasets(top_dir,extension):
+def find_all_datasets(top_dir,extension,gen):
     """Crawl through the JWST test regression datasystem
     to locate files.
 
@@ -250,6 +271,7 @@ def find_all_datasets(top_dir,extension):
     top_levels = []
     files = []
 
+    print('the gen in here=',gen)
     for item in os.listdir(top_dir):
         full_path = os.path.join(top_dir, item)
         pattern = re.compile('[a-z]{2}\d{5}')
@@ -261,6 +283,8 @@ def find_all_datasets(top_dir,extension):
         elif item.find(extension) > 0 and os.path.isfile(full_path):
             #top_levels.append(top_dir)
             files.append(full_path)
+ 
+
 
     if top_levels and not files:
         results = build_dask_delayed_list(walk_filesystem, top_levels, extension)
@@ -270,7 +294,13 @@ def find_all_datasets(top_dir,extension):
     elif files:
         files=glob.glob(top_dir+"/*"+extension)
         return top_levels, files
+    elif gen == 1:
+        w_card='*.'+extension
+        files=[y for x in os.walk(top_dir) for y in glob.glob(os.path.join(x[0], w_card))]
+        check_files(files)
+        return top_levels, files
 
+    print(top_levels, files)
 
 def data_unique(fname, session):
     """
@@ -320,7 +350,10 @@ def data_exists(fname, session):
     args['PUPIL'] = header.get('PUPIL')
     args['BAND'] = header.get('BAND')
     args['GRATING'] = header.get('GRATING')
+    args['NINTS'] = header.get('NINTS')
+    args['NGROUPS'] = header.get('NGROUPS')
     args['EXP_TYPE'] = header.get('EXP_TYPE')
+    args['TEMPLATE'] = header.get('TEMPLATE')
     args['READPATT'] = header.get('READPATT')
     args['SUBARRAY'] = header.get('SUBARRAY')
     args['SUBSTRT1'] = header.get('SUBSTRT1')
@@ -328,6 +361,8 @@ def data_exists(fname, session):
     args['SUBSIZE1'] = header.get('SUBSIZE1')
     args['SUBSIZE2'] = header.get('SUBSIZE2')
     args['CORONMSK'] = header.get('CORONMSK', default='N/A')
+    args['BKGDTARG'] = header.get('BKGDTARG')
+    args['TSOVISIT'] = header.get('TSOVISIT')
 
     query_result = session.query(RegressionData).filter_by(**args)
     return query_result
@@ -411,7 +446,7 @@ def add_test_data(file_path, db_path=None, force=False, replace=False, full_forc
 
 
 
-def bulk_populate(force, file_path, db_path, num_cpu, extension):
+def bulk_populate(force, file_path, db_path, num_cpu, extension, gen):
     """Populate database in parallel.
 
     Parameters
@@ -433,11 +468,13 @@ def bulk_populate(force, file_path, db_path, num_cpu, extension):
     print("GATHERING DATA, THIS CAN TAKE A FEW MINUTES....")
 
     # Looks for all the files with the provided extension in the find_all_datasets function
-    all_file_dirs, full_file_paths = find_all_datasets(file_path,extension)
+    all_file_dirs, full_file_paths = find_all_datasets(file_path,extension,gen)
+    print('all files are =',all_file_dirs,full_file_paths)
 
     session = load_session(db_path)
 
 
+    
     data = build_dask_delayed_list(RegressionData, full_file_paths,1)
     #all_file_paths)
 
@@ -460,6 +497,35 @@ def bulk_populate(force, file_path, db_path, num_cpu, extension):
         for directory in all_file_dirs:
             add_test_data(directory, db_path, force=force, extension=extension)
 
+def check_files(filenames):
+
+    for f in filenames:
+       print(f)
+       hdu=fits.open(f)
+       header=hdu[0].header
+       INSTRUME = header.get('INSTRUME')
+       DETECTOR = header.get('DETECTOR')
+       CHANNEL = header.get('CHANNEL')
+       FILTER = header.get('FILTER')
+       PUPIL = header.get('PUPIL')
+       BAND = header.get('BAND')
+       GRATING = header.get('GRATING')
+       NINTS = header.get('NINTS')
+       NGROUPS = header.get('NGROUPS')
+       EXP_TYPE = header.get('EXP_TYPE')
+       TEMPLATE = header.get('TEMPLATE')
+       READPATT = header.get('READPATT')
+       SUBARRAY = header.get('SUBARRAY')
+       SUBSTRT1 = header.get('SUBSTRT1')
+       SUBSTRT2 = header.get('SUBSTRT2')
+       SUBSIZE1 = header.get('SUBSIZE1')
+       SUBSIZE2 = header.get('SUBSIZE2')
+       CORONMSK = header.get('CORONMSK', default='N/A')
+       BKGDTARG = header.get('BKGDTARG')
+       TSOVISIT = header.get('TSOVISIT')
+       hdu.close()
+
+                                  
 
 def main():
     """Main to parse command line arguments.
@@ -473,9 +539,11 @@ def main():
     None
     """
 
+    # [--gen=<int>] --version
     # Get docopt arguments..
     args = docopt(__doc__, version='0.1')
 
+    print(args['--gen'])
     # Parse command line arguments
     if args['create']:
         create_test_data_db(args['<db_path>'])
@@ -496,9 +564,11 @@ def main():
                           args['<file_path>'],
                           args['<db_path>'],
                           int(args['--num_cpu']),
-                          args['--extension'])
+                          args['--extension'],
+                          int(args['--gen']))
             else:
                bulk_populate(False,args['<file_path>'],
                           args['<db_path>'],
                           int(args['--num_cpu']),
-                          args['--extension'])
+                          args['--extension'],
+                          int(args['--gen']))
